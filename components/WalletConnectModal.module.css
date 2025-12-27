@@ -1,0 +1,161 @@
+.overlay{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  background:rgba(8,18,44,.60);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  display:grid;
+  place-items:center;
+  padding:12px;
+  min-height:100dvh
+}
+
+.modal{
+  width:min(400px, calc(100vw - 24px));
+  max-height:min(460px, calc(100dvh - 24px));
+  overflow:hidden;
+  border-radius:14px;
+  background:radial-gradient(120% 120% at 20% 10%, rgba(10,18,44,.90), rgba(10,18,44,.90));
+  border:1px solid rgba(120,170,255,.22);
+  box-shadow:0 16px 52px rgba(0,0,0,.55);
+  display:flex;
+  flex-direction:column
+}
+
+.head{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:7px 38px 8px;
+  flex:0 0 auto
+}
+
+.title{
+  font-size:15px;
+  font-weight:650;
+  letter-spacing:-.02em;
+  text-align:center;
+  color:rgba(255,255,255,.92)
+}
+
+.close{
+  position:absolute;
+  right:8px;
+  top:6px;
+  width:30px;
+  height:30px;
+  border-radius:11px;
+  border:1px solid rgba(120,170,255,.16);
+  background:rgba(10,16,34,.65);
+  color:rgba(255,255,255,.92);
+  font-size:20px;
+  line-height:0;
+  cursor:pointer
+}
+
+.body{
+  min-height:0;
+  overflow:auto;
+  padding:3px 3px 8px
+}
+
+.list{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  padding:7px
+}
+
+.item{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:9px 9px;
+  border-radius:12px;
+  border:1px solid rgba(120,170,255,.13);
+  background:rgba(16,26,58,.58);
+  color:rgba(255,255,255,.92);
+  cursor:pointer;
+  outline:none;
+  box-shadow:none;
+  appearance:none;
+  -webkit-appearance:none
+}
+
+.item:hover{
+  background:rgba(16,26,58,.70);
+  border-color:rgba(120,170,255,.20)
+}
+
+.item:disabled{
+  opacity:.6;
+  cursor:default
+}
+
+.left{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-width:0
+}
+
+.iconWrap{
+  width:30px;
+  height:30px;
+  border-radius:8px;
+  border:0;
+  background:transparent;
+  display:block;
+  overflow:hidden;
+  flex:0 0 auto
+}
+
+.iconWrapCoinbase{
+  border-radius:999px;
+  overflow:hidden;
+  background:rgba(255,255,255,.06)
+}
+
+.icon{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  display:block;
+  filter:drop-shadow(0 2px 10px rgba(0,0,0,.28))
+}
+
+.iconBig{
+  object-fit:cover;
+  transform:scale(1.85);
+  transform-origin:center
+}
+
+.iconCoinbase{
+  object-fit:cover;
+  border-radius:999px
+}
+
+.name{
+  font-weight:650;
+  font-size:13px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+
+.meta{
+  font-size:11px;
+  color:rgba(240,246,255,.6);
+  flex:0 0 auto
+}
+
+.note{
+  padding:0 12px 8px;
+  color:rgba(240,246,255,.7);
+  font-size:12px;
+  line-height:1.4
+}

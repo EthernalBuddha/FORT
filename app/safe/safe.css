@@ -1,0 +1,257 @@
+.safeScope{
+  color: rgba(255,255,255,0.92);
+}
+
+.safeScope .container{
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 24px 44px;
+}
+
+.safeScope .card{
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(10,16,28,0.50);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px);
+}
+
+.safeScope .muted{ opacity: 0.72; }
+.safeScope .ok{ color: rgba(170,255,220,0.95); }
+.safeScope .err{ color: rgba(255,190,190,0.95); }
+
+.safeScope .chip{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(10,16,28,0.42);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.safeScope .chipOk{
+  border-color: rgba(170,255,220,0.22);
+  background: rgba(20,60,44,0.22);
+}
+
+.safeScope .chipErr{
+  border-color: rgba(255,190,190,0.22);
+  background: rgba(70,20,26,0.20);
+}
+
+.safeScope .banner{
+  margin-top: 10px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(10,16,28,0.42);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.safeScope .bannerOk{
+  border-color: rgba(170,255,220,0.22);
+  background: rgba(20,60,44,0.22);
+}
+
+.safeScope .bannerErr{
+  border-color: rgba(255,190,190,0.22);
+  background: rgba(70,20,26,0.20);
+}
+
+.safeScope input, .safeScope button{ font: inherit; }
+
+.safeScope input{
+  width: 100%;
+  background: rgba(10,16,28,0.55);
+  color: rgba(255,255,255,0.92);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  padding: 11px 12px;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.safeScope input:focus{
+  border-color: rgba(220,232,250,0.35);
+  box-shadow:
+    0 0 0 3px rgba(150,190,240,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.safeScope button{
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.92);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 14px;
+  padding: 10px 14px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+
+.safeScope button:hover{ filter: brightness(1.05); }
+.safeScope button:disabled{ opacity: 0.55; cursor: not-allowed; }
+
+.safeScope .btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+}
+
+.safeScope .btnXs{
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 12px;
+}
+
+.safeScope .btnOk,
+.safeModal .btnOk{
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(140,255,200,0.26) !important;
+  color: rgba(235,255,245,0.92) !important;
+}
+
+.safeScope .btnOk:hover,
+.safeModal .btnOk:hover{ filter: brightness(1.06); }
+
+.safeScope .stack{ display: flex; flex-direction: column; gap: 16px; }
+.safeScope .stackSm{ display: flex; flex-direction: column; gap: 10px; }
+.safeScope .row{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.safeScope .grow{ flex: 1; min-width: 260px; }
+.safeScope .amount{ width: 160px; }
+
+.safeScope .txItem{
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(10,16,28,0.38);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.safeScope .txTop{ display: flex; gap: 10px; flex-wrap: wrap; }
+
+.safeScope .ownerRow{
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  background: rgba(10,16,28,0.35);
+  justify-content: space-between;
+}
+
+.safeScope .ownerRow:hover{ border-color: rgba(255,255,255,0.14); }
+
+.safeScope .menuWrap{ position: relative; }
+
+.safeScope .menuPanel{
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 240px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(6,10,20,0.75);
+  padding: 10px;
+  z-index: 50;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+  backdrop-filter: blur(12px);
+}
+
+.safeScope .menuItem{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.safeScope .menuItem:hover{ filter: brightness(1.05); }
+
+.safeScope .menuLabel{
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.safeScope .menuHint{
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.safeScope .menuSep{
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 10px 2px;
+}
+
+.safeScope .footer{ padding: 18px 0 24px; }
+
+.safeScope .footerBar{
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: rgba(6,12,26,0.18);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  backdrop-filter: blur(12px);
+}
+
+.safeScope .footerText{
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  letter-spacing: .04em;
+  color: rgba(255,255,255,0.70);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 650;
+}
+
+.safeScope .footerX{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255,255,255,0.70);
+  text-decoration: none;
+  line-height: 0;
+}
+
+.safeScope .footerX:hover{ color: rgba(255,255,255,0.90); }
+
+.safeScope .footerX:focus-visible{
+  outline: 2px solid rgba(255,255,255,0.20);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.safeScope .footerX svg{ display: block; }

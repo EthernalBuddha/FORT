@@ -1,0 +1,103 @@
+.wrap{
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  isolation: isolate;
+  color: rgba(255,255,255,0.92);
+  background:
+    radial-gradient(1200px 700px at 20% 20%, rgba(64,110,170,0.45), transparent 60%),
+    radial-gradient(900px 600px at 70% 85%, rgba(80,130,190,0.35), transparent 55%),
+    linear-gradient(180deg, #060a14 0%, #0b1631 35%, #24406b 100%);
+}
+
+.wrap::before{
+  content:"";
+  position: fixed;
+  inset:0;
+  z-index:0;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255,255,255,0.03) 0px,
+      rgba(255,255,255,0.03) 1px,
+      transparent 1px,
+      transparent 56px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,0.02) 0px,
+      rgba(255,255,255,0.02) 1px,
+      transparent 1px,
+      transparent 120px
+    );
+  opacity: 0.7;
+  pointer-events:none;
+}
+
+.wrap::after{
+  content:"";
+  position: fixed;
+  inset:-10%;
+  z-index:0;
+  background:
+    radial-gradient(circle at 78% 46%,
+      transparent 0 52%,
+      rgba(255,255,255,0.14) 52.2% 52.6%,
+      transparent 53% 100%
+    ),
+    radial-gradient(circle at 72% 60%,
+      transparent 0 66%,
+      rgba(255,255,255,0.08) 66.2% 66.45%,
+      transparent 67% 100%
+    );
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  pointer-events:none;
+}
+
+.header{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  background: linear-gradient(180deg, rgba(6,10,20,0.70) 0%, rgba(6,10,20,0.10) 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.brand{
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  user-select: none;
+}
+
+.mark{
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  opacity: 0.82;
+  filter: brightness(0.95) contrast(0.95) drop-shadow(0 10px 30px rgba(0,0,0,0.35));
+}
+
+.word{
+  font-family: var(--font-brand);
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.55) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 18px 40px rgba(0,0,0,0.25);
+}
+
+.main{
+  position: relative;
+  z-index: 2;
+}
