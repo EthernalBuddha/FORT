@@ -103,7 +103,7 @@ function isAddChainErr(e: any) {
     msg.includes("unrecognized chain") ||
     msg.includes("unknown chain") ||
     msg.includes("chain is not added") ||
-    msg.includes("not added") && msg.includes("chain") ||
+    (msg.includes("not added") && msg.includes("chain")) ||
     msg.includes("add ethereum chain") ||
     msg.includes("wallet_addethereumchain")
   );
@@ -608,7 +608,7 @@ export default function Page() {
       }
 
       const iface = new ethers.Interface(FACTORY_ABI);
-      const topic0 = iface.getEvent("SaveCreated").topicHash;
+      const topic0 = ethers.id("SaveCreated(address,address[3])");
 
       const step = Math.max(2000, LOG_CHUNK);
       for (let from = start0; from <= latest; from += step) {
@@ -1144,7 +1144,7 @@ export default function Page() {
       let created: string | null = null;
       try {
         const iface = new ethers.Interface(FACTORY_ABI);
-        const topic0 = iface.getEvent("SaveCreated").topicHash;
+        const topic0 = ethers.id("SaveCreated(address,address[3])");
         const logs = Array.isArray(rc?.logs) ? rc.logs : [];
         for (const lg of logs) {
           const addr = (lg?.address || "").toLowerCase();
