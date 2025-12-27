@@ -1032,7 +1032,7 @@ const a2 = await (reader as any).owners(2, { from });
       const from = ethers.getAddress(activeWallet);
       for (let i = 0; i < 1000; i++) {
         try {
-          const t = await reader.txs(i, { from });
+          const t = await (reader as any).txs(i, { from });
           items.push({
             id: i,
             to: t.to,
