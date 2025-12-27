@@ -980,9 +980,10 @@ export default function Page() {
       let ownersArr: string[] = [];
       try {
         const from = ethers.getAddress(activeWallet);
-        const a0 = await reader.owners(0, { from });
-        const a1 = await reader.owners(1, { from });
-        const a2 = await reader.owners(2, { from });
+        const a0 = await (reader as any).owners(0, { from });
+const a1 = await (reader as any).owners(1, { from });
+const a2 = await (reader as any).owners(2, { from });
+
         ownersArr = [a0, a1, a2];
       } catch {
         setAccess("denied");
