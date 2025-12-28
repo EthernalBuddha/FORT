@@ -1,6 +1,6 @@
 # FORT
 
-Multisig dApp for secure USDC transfers on Arc Testnet. Built with Next.js (App Router) + ethers.
+Multisig dApp for secure transfers on Arc Testnet. Built with Next.js (App Router) + ethers.
 
 https://fortsafe.vercel.app/
 
