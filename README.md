@@ -24,11 +24,7 @@ https://fortsafe.vercel.app/
 - Factory: `0xd09B0e8c53354Bf0865940371FD6ff98874D1b89`
 - Event: `SaveCreated`
 
-## localStorage
-- `arcsafe:safeName:<addr>`
-- `arcsafe:safesByWallet:<wallet>` (robust parse + migration)
-- `arcsafe:txHash:<safe>:<id>`
-- `arcsafe:scanBlock:<wallet>`
+
 
 ## Run locally
 ```bash
