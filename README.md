@@ -3,7 +3,7 @@
 Multisig dApp for secure USDC transfers on **Arc Testnet**. Built with **Next.js (App Router)** + **ethers**.
 
 
-https://arc-safe.vercel.app
+https://fortsafe.vercel.app/
 
 ## Features
 - Wallet connect: EIP-6963 + fallback (`WalletConnectModal`), normalized EIP-1193 (`provider.request`)
