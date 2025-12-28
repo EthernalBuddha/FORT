@@ -13,6 +13,7 @@ https://fortsafe.vercel.app/
 - Sync: scans `SaveCreated` via chunked `provider.getLogs` and stores the last scanned block per wallet
 
 ## Network
+- Name: Arc Testnet
 - ChainId: `5042002` (`0x4cef52`)
 - RPC: https://rpc.testnet.arc.network
 - Currency symbol: USDC
