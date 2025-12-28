@@ -731,8 +731,7 @@ export default function Page() {
         await ensureConnected(eth);
         const ok = await ensureArcNetwork(eth);
         if (ok && loadedSafe) await loadSafe(loadedSafe);
-      } catch {}
-      finally {
+      } catch {} finally {
         autoSwitchRef.current = false;
       }
     })();
@@ -975,15 +974,14 @@ export default function Page() {
 
       setAccess("checking");
 
-      const reader = new ethers.Contract(a, SAFE_ABI, p);
+      const reader: any = new ethers.Contract(a, SAFE_ABI, p);
 
       let ownersArr: string[] = [];
       try {
         const from = ethers.getAddress(activeWallet);
-        const a0 = await (reader as any).owners(0, { from });
-const a1 = await (reader as any).owners(1, { from });
-const a2 = await (reader as any).owners(2, { from });
-
+        const a0 = await reader.owners(0, { from });
+        const a1 = await reader.owners(1, { from });
+        const a2 = await reader.owners(2, { from });
         ownersArr = [a0, a1, a2];
       } catch {
         setAccess("denied");
@@ -1032,7 +1030,7 @@ const a2 = await (reader as any).owners(2, { from });
       const from = ethers.getAddress(activeWallet);
       for (let i = 0; i < 1000; i++) {
         try {
-          const t = await (reader as any).txs(i, { from });
+          const t = await reader.txs(i, { from });
           items.push({
             id: i,
             to: t.to,
@@ -1131,12 +1129,13 @@ const a2 = await (reader as any).owners(2, { from });
       setSigner(s2);
       setWallet(w);
 
-      const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, s2);
+      const factory: any = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, s2);
 
       let predicted: string | null = null;
       try {
         predicted = await factory.createSave.staticCall([o1, o2, o3]);
-        predicted = normAddr(predicted) || null;
+        predicted = normAddr(predicted ?? "") || null;
+
       } catch {}
 
       const tx = await factory.createSave([o1, o2, o3]);
@@ -1248,7 +1247,7 @@ const a2 = await (reader as any).owners(2, { from });
 
       const p2 = new ethers.BrowserProvider(eth);
       const s2 = await p2.getSigner();
-      const safe = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
+      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
 
       let predictedId: any = null;
       try {
@@ -1315,7 +1314,7 @@ const a2 = await (reader as any).owners(2, { from });
 
       const p2 = new ethers.BrowserProvider(eth);
       const s2 = await p2.getSigner();
-      const safe = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
+      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
 
       const tx = await safe.confirmTx(id);
       await tx.wait();
@@ -1365,7 +1364,7 @@ const a2 = await (reader as any).owners(2, { from });
 
       const p2 = new ethers.BrowserProvider(eth);
       const s2 = await p2.getSigner();
-      const safe = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
+      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
 
       const tx = await safe.executeTx(id);
       await tx.wait();
@@ -1931,7 +1930,9 @@ const a2 = await (reader as any).owners(2, { from });
                         overflow: "hidden",
                       };
 
-                      const menuWrapStyle: CSSProperties = openUp ? { ...menuBaseStyle, bottom: 44 } : { ...menuBaseStyle, top: 44 };
+                      const menuWrapStyle: CSSProperties = openUp
+                        ? { ...menuBaseStyle, bottom: 44 }
+                        : { ...menuBaseStyle, top: 44 };
 
                       const menuBtnStyle: CSSProperties = {
                         width: "100%",
@@ -1991,7 +1992,9 @@ const a2 = await (reader as any).owners(2, { from });
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                setRowMenuOpenFor((cur) => (cur && cur.toLowerCase() === a.toLowerCase() ? "" : a));
+                                setRowMenuOpenFor((cur) =>
+                                  cur && cur.toLowerCase() === a.toLowerCase() ? "" : a
+                                );
                               }}
                             >
                               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -2042,7 +2045,13 @@ const a2 = await (reader as any).owners(2, { from });
                               >
                                 <span style={{ width: 18, display: "inline-flex", justifyContent: "center" }}>
                                   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path d="M3 6h18" fill="none" stroke="rgba(255,95,115,0.95)" strokeWidth="2" strokeLinecap="round" />
+                                    <path
+                                      d="M3 6h18"
+                                      fill="none"
+                                      stroke="rgba(255,95,115,0.95)"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                    />
                                     <path
                                       d="M8 6V4h8v2"
                                       fill="none"
@@ -2059,7 +2068,13 @@ const a2 = await (reader as any).owners(2, { from });
                                       strokeLinecap="round"
                                       strokeLinejoin="round"
                                     />
-                                    <path d="M10 11v6M14 11v6" fill="none" stroke="rgba(255,95,115,0.95)" strokeWidth="2" strokeLinecap="round" />
+                                    <path
+                                      d="M10 11v6M14 11v6"
+                                      fill="none"
+                                      stroke="rgba(255,95,115,0.95)"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                    />
                                   </svg>
                                 </span>
                                 Remove
@@ -2401,14 +2416,7 @@ const a2 = await (reader as any).owners(2, { from });
         <div className="container" style={{ maxWidth: 1320, width: "100%", padding: "0 24px", margin: "0 auto", boxSizing: "border-box" }}>
           <div className="footerBar">
             <div className="footerText">2025 · FORT · Built on Arc Network · All rights reserved.</div>
-            <a
-              className="footerX"
-              href="https://x.com/Gioddddd"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="X"
-              title="X"
-            >
+            <a className="footerX" href="https://x.com/Gioddddd" target="_blank" rel="noopener noreferrer" aria-label="X" title="X">
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M18.9 2H22l-6.8 7.8L23 22h-6.3l-4.9-6.4L6.2 22H3l7.4-8.4L1 2h6.4l4.4 5.8L18.9 2Zm-1.1 18h1.7L7.5 3.9H5.7L17.8 20Z"
