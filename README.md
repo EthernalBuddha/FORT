@@ -17,8 +17,6 @@ https://fortsafe.vercel.app/
 - RPC: https://rpc.testnet.arc.network
 - Currency symbol: USDC
 - Explorer: https://testnet.arcscan.app
-  - tx: `/tx/<hash>`
-  - address: `/address/<addr>`
 
 ## Contracts
 - Factory: `0xd09B0e8c53354Bf0865940371FD6ff98874D1b89`
