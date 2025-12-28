@@ -89,7 +89,9 @@ export default function Page() {
                   <span className="faqQ">Can I verify the deployment?</span>
                   <span className="faqIcon" aria-hidden="true" />
                 </summary>
-                <div className="faqA">Yes. Contracts are published on ArcScan so you can review bytecode and transactions</div>
+                <div className="faqA">
+                  Yes. Contracts are published on ArcScan so you can review bytecode and transactions
+                </div>
               </details>
 
               <details className="faqItem">
@@ -119,23 +121,41 @@ export default function Page() {
 
         <footer className="footer">
           <div className="footerBar">
-            <div className="footerText">2025 · FORT · Built on Arc Network · All rights reserved.</div>
+            <div className="footerText">© 2025 FORT · Built on Arc Network · All rights reserved.</div>
 
-            <a
-              className="footerX"
-              href="https://x.com/Gioddddd"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="X"
-              title="X"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M18.9 2H22l-6.8 7.8L23 22h-6.3l-4.9-6.4L6.2 22H3l7.4-8.4L1 2h6.4l4.4 5.8L18.9 2Zm-1.1 18h1.7L7.5 3.9H5.7L17.8 20Z"
-                  fill="currentColor"
-                />
-              </svg>
-            </a>
+            <div className="footerIcons">
+              <a
+                className="footerX"
+                href="https://x.com/Gioddddd"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="X"
+                title="X"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M18.9 2H22l-6.8 7.8L23 22h-6.3l-4.9-6.4L6.2 22H3l7.4-8.4L1 2h6.4l4.4 5.8L18.9 2Zm-1.1 18h1.7L7.5 3.9H5.7L17.8 20Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </a>
+
+              <a
+                className="footerX"
+                href="https://github.com/EthernalBuddha/ARCsafe2"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="GitHub"
+                title="GitHub"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.11 3.29 9.44 7.86 10.97.57.1.78-.25.78-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.37-3.88-1.37-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2 1.03 1.78 2.7 1.27 3.36.97.1-.75.4-1.27.72-1.56-2.56-.3-5.26-1.29-5.26-5.73 0-1.27.45-2.31 1.19-3.13-.12-.3-.52-1.51.11-3.15 0 0 .97-.31 3.18 1.2.92-.26 1.9-.39 2.88-.39.98 0 1.96.13 2.88.39 2.2-1.51 3.18-1.2 3.18-1.2.63 1.64.23 2.85.11 3.15.74.82 1.19 1.86 1.19 3.13 0 4.45-2.7 5.43-5.28 5.72.41.36.78 1.08.78 2.18 0 1.57-.01 2.83-.01 3.22 0 .3.2.66.79.55 4.57-1.53 7.86-5.86 7.86-10.97C23.5 5.74 18.27.5 12 .5Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </a>
+            </div>
           </div>
         </footer>
       </main>
@@ -489,6 +509,12 @@ export default function Page() {
           border:1px solid rgba(255,255,255,0.08);
           border-radius:18px;
           backdrop-filter:blur(12px);
+        }
+        .footerIcons{
+          flex:0 0 auto;
+          display:inline-flex;
+          align-items:center;
+          gap:14px;
         }
         .footerText{
           min-width:0;
