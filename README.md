@@ -15,7 +15,7 @@ https://fortsafe.vercel.app/
 ## Network
 - ChainId: `5042002` (`0x4cef52`)
 - RPC: https://rpc.testnet.arc.network
-- Currency Symbol: USDC
+- Currency symbol: USDC
 - Explorer: https://testnet.arcscan.app
   - tx: `/tx/<hash>`
   - address: `/address/<addr>`
