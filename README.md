@@ -24,6 +24,8 @@ https://fortsafe.vercel.app/
 - Factory: `0xd09B0e8c53354Bf0865940371FD6ff98874D1b89`
 - Event: `SaveCreated`
 
+## Data persistence
+The dApp stores Safe metadata, tx hashes, and Sync scan progress in browser `localStorage` (per wallet).
 
 
 ## Run locally
