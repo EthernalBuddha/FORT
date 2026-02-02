@@ -17,6 +17,8 @@
     0 20px 60px rgba(0,0,0,0.35),
     inset 0 1px 0 rgba(255,255,255,0.06);
   backdrop-filter: blur(10px);
+  overflow: visible;
+  position: relative;
 }
 
 .safeScope .muted{ opacity: 0.72; }
@@ -37,6 +39,7 @@
   font-weight: 650;
   line-height: 1;
   white-space: nowrap;
+  text-transform: uppercase;
 }
 
 .safeScope .chipOk{
@@ -98,10 +101,15 @@
   padding: 10px 14px;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+  transition: text-shadow 0.2s ease, color 0.2s ease;
 }
 
-.safeScope button:hover{ filter: brightness(1.05); }
+.safeScope button:hover:not(.menuItem){ 
+  text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
+  color: #fff;
+}
 .safeScope button:disabled{ opacity: 0.55; cursor: not-allowed; }
+.safeScope button:disabled:hover{ text-shadow: none; color: rgba(255,255,255,0.92); }
 
 .safeScope .btn{
   display: inline-flex;
@@ -110,6 +118,7 @@
   gap: 8px;
   height: 40px;
   padding: 0 14px;
+  text-transform: uppercase;
 }
 
 .safeScope .btnXs{
@@ -119,15 +128,136 @@
   border-radius: 12px;
 }
 
+.safeScope a.btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.92);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: text-shadow 0.2s ease, color 0.2s ease;
+}
+
+.safeScope a.btn:hover{
+  text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
+  color: #fff;
+}
+
+.safeScope .ownersBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  background: rgba(80,220,170,0.1);
+  border: 1px solid rgba(80,220,170,0.5);
+  color: rgba(255,255,255,0.9);
+  padding: 10px 18px;
+  border-radius: 14px;
+  outline: none;
+  transition: text-shadow 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.safeScope .ownersBtn:hover{
+  text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
+  color: #fff;
+  border-color: rgba(80,220,170,0.7);
+}
+.safeScope .ownersBtn::-webkit-details-marker{
+  display: none;
+}
+.safeScope .ownersBtn::marker{
+  display: none;
+  content: "";
+}
+
+.safeScope .ownerCopyBtn{
+  color: rgba(255,255,255,0.5);
+  transition: text-shadow 0.2s ease, color 0.2s ease;
+}
+.safeScope .ownerRow:hover .ownerCopyBtn{
+  text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
+  color: #fff;
+}
+
+.safeScope .copyIconBtn{
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.6);
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.2s ease, filter 0.2s ease;
+}
+.safeScope .copyIconBtn:hover{
+  color: #fff;
+  filter: drop-shadow(0 0 6px rgba(150,200,255,0.5));
+}
+
+.safeScope .menuIconBtn{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.8);
+  outline: none;
+  white-space: nowrap;
+}
+
+.safeScope .menuIconLabel{
+  font-size: 12px;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease, max-width 0.2s ease;
+}
+
+.safeScope .menuIconBtn:hover .menuIconLabel{
+  opacity: 1;
+  max-width: 80px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.safeScope .blinkText{
+  animation: pulse 2s ease-in-out infinite;
+}
+
 .safeScope .btnOk,
 .safeModal .btnOk{
-  background: rgba(255,255,255,0.08) !important;
-  border-color: rgba(140,255,200,0.26) !important;
-  color: rgba(235,255,245,0.92) !important;
+  background: rgba(80,220,170,0.1) !important;
+  border-color: rgba(80,220,170,0.5) !important;
+  color: rgba(255,255,255,0.9) !important;
 }
 
 .safeScope .btnOk:hover,
-.safeModal .btnOk:hover{ filter: brightness(1.06); }
+.safeModal .btnOk:hover{ 
+  filter: brightness(1.1);
+  border-color: rgba(80,220,170,0.7) !important;
+}
+
+.safeModal button{
+  transition: text-shadow 0.2s ease, color 0.2s ease;
+}
+
+.safeModal button:hover{
+  text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
+  color: #fff;
+}
+
+.safeModal button:disabled:hover{
+  text-shadow: none;
+}
 
 .safeScope .stack{ display: flex; flex-direction: column; gap: 16px; }
 .safeScope .stackSm{ display: flex; flex-direction: column; gap: 10px; }
@@ -185,17 +315,26 @@
   border: 1px solid rgba(255,255,255,0.10);
 }
 
-.safeScope .menuItem:hover{ filter: brightness(1.05); }
+.safeScope .menuItem{
+  filter: none !important;
+}
 
 .safeScope .menuLabel{
   font-size: 13px;
   font-weight: 650;
   letter-spacing: 0.2px;
+  color: rgba(255,255,255,0.85);
 }
 
 .safeScope .menuHint{
   font-size: 12px;
-  opacity: 0.72;
+  color: rgba(255,255,255,0.5);
+  transition: filter 0.2s ease, color 0.2s ease;
+}
+
+.safeScope .menuHint:hover{
+  color: #fff;
+  filter: drop-shadow(0 0 6px rgba(150,200,255,0.5));
 }
 
 .safeScope .menuSep{
@@ -255,3 +394,15 @@
 }
 
 .safeScope .footerX svg{ display: block; }
+
+.safeScope .explorerLink{
+  opacity: 0.7;
+  font-size: 12px;
+  text-transform: uppercase;
+  transition: opacity 0.2s ease, text-shadow 0.2s ease;
+}
+
+.safeScope .explorerLink:hover{
+  opacity: 1;
+  text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
+}

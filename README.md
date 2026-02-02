@@ -20,7 +20,7 @@ https://fortsafe.vercel.app/
 - Explorer: https://testnet.arcscan.app
 
 ## Contracts
-- Factory: `0xd09B0e8c53354Bf0865940371FD6ff98874D1b89`
+- Factory: `0x264E2d5537B0073F35eD6A0Ed006Eb21022985c7`
 - Event: `SaveCreated`
 
 ## Data persistence

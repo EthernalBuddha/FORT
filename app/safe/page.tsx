@@ -7,7 +7,8 @@ import styles from "./page.module.css";
 import WalletMenu from "../../components/WalletMenu";
 import WalletConnectModal from "../../components/WalletConnectModal";
 
-const FACTORY_ADDRESS = "0xd09B0e8c53354Bf0865940371FD6ff98874D1b89";
+const FACTORY_ADDRESS_RAW = "0x264e2d5537b0073f35ed6a0ed006eb21022985c7";
+const FACTORY_ADDRESS = ethers.getAddress(FACTORY_ADDRESS_RAW);
 const ARC_CHAIN_ID = 5042002;
 const ARC_CHAIN_ID_HEX = "0x4cef52";
 
@@ -32,6 +33,9 @@ const ARC_CHAIN_PARAMS = {
 const FACTORY_ABI = [
   "event SaveCreated(address save, address[3] owners)",
   "function createSave(address[3] owners) payable returns (address)",
+  "function getSafesForOwner(address owner) view returns (address[])",
+  "function getSafeName(address safe) view returns (string)",
+  "function setSafeName(address safe, string name)",
 ];
 
 const SAFE_ABI = [
@@ -47,14 +51,20 @@ const NAME_PREFIX = "arcsafe:safeName:";
 const SAFES_BY_WALLET_PREFIX = "arcsafe:safesByWallet:";
 const TXHASH_PREFIX = "arcsafe:txHash:";
 const SCAN_BLOCK_PREFIX = "arcsafe:scanBlock:";
+const HIDDEN_SAFES_PREFIX = "arcsafe:hiddenSafes:";
+const CONNECTED_WALLET_KEY = "arcsafe:connectedWallet";
 
 const FACTORY_FROM_BLOCK = Number(process.env.NEXT_PUBLIC_FACTORY_FROM_BLOCK || 0);
 const LOG_CHUNK = Number(process.env.NEXT_PUBLIC_FACTORY_LOG_CHUNK || 35000);
 
 function normAddr(x: string) {
-  const a = (x || "").trim();
-  if (!ethers.isAddress(a)) return null;
-  return ethers.getAddress(a);
+  const a = (x || "").trim().toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(a)) return null;
+  try {
+    return ethers.getAddress(a);
+  } catch {
+    return null;
+  }
 }
 
 function short(a: string) {
@@ -205,6 +215,49 @@ function addSafeForWallet(wallet: string, safe: string) {
 
     localStorage.setItem(key, JSON.stringify(next));
   } catch {}
+}
+
+function getHiddenSafes(wallet: string): string[] {
+  try {
+    const w = (wallet || "").toLowerCase();
+    if (!w) return [];
+    const raw = localStorage.getItem(HIDDEN_SAFES_PREFIX + w);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.map((x: string) => x.toLowerCase()) : [];
+  } catch {
+    return [];
+  }
+}
+
+function hideSafe(wallet: string, safe: string) {
+  try {
+    const w = (wallet || "").toLowerCase();
+    const s = normAddr(safe);
+    if (!w || !s) return;
+    const hidden = getHiddenSafes(wallet);
+    if (!hidden.includes(s.toLowerCase())) {
+      hidden.push(s.toLowerCase());
+      localStorage.setItem(HIDDEN_SAFES_PREFIX + w, JSON.stringify(hidden));
+    }
+  } catch {}
+}
+
+function unhideSafe(wallet: string, safe: string) {
+  try {
+    const w = (wallet || "").toLowerCase();
+    const s = normAddr(safe);
+    if (!w || !s) return;
+    const hidden = getHiddenSafes(wallet);
+    const next = hidden.filter((x) => x !== s.toLowerCase());
+    localStorage.setItem(HIDDEN_SAFES_PREFIX + w, JSON.stringify(next));
+  } catch {}
+}
+
+function isSafeHidden(wallet: string, safe: string): boolean {
+  const s = normAddr(safe);
+  if (!s) return false;
+  return getHiddenSafes(wallet).includes(s.toLowerCase());
 }
 
 function getStoredTxHash(safe: string, id: number) {
@@ -367,6 +420,7 @@ function PortalModal({
     fontWeight: 650,
     letterSpacing: "-0.02em",
     textAlign: "center",
+    textTransform: "uppercase",
   };
 
   const closeStyle: CSSProperties = {
@@ -449,6 +503,7 @@ export default function Page() {
   const [safeErr, setSafeErr] = useState("");
 
   const [createdSafes, setCreatedSafes] = useState<string[]>([]);
+  const [safeNames, setSafeNames] = useState<Record<string, string>>({});
 
   const [walletMsg, setWalletMsg] = useState<any>(null);
   const [createMsg, setCreateMsg] = useState<any>(null);
@@ -461,6 +516,7 @@ export default function Page() {
     txAction: null as null | { id: number; action: "confirm" | "execute" },
     switchNet: false,
     syncSafes: false,
+    rename: false,
   });
 
   const [copiedOwner, setCopiedOwner] = useState("");
@@ -477,10 +533,50 @@ export default function Page() {
   const [removeAddr, setRemoveAddr] = useState("");
 
   const [copyTipOpen, setCopyTipOpen] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     walletRef.current = wallet;
   }, [wallet]);
+
+  useEffect(() => {
+    const tryAutoConnect = async () => {
+      try {
+        const savedKey = localStorage.getItem(CONNECTED_WALLET_KEY);
+        if (!savedKey) return;
+
+        const eth = (window as any).ethereum;
+        if (!eth) return;
+
+        const providers = Array.isArray(eth?.providers) && eth.providers.length ? eth.providers : eth ? [eth] : [];
+        
+        let targetEth = null;
+        for (const p of providers) {
+          const name = p?.isMetaMask ? "metamask" : p?.isRabby ? "rabby" : p?.isCoinbaseWallet ? "coinbase" : "";
+          if (name === savedKey || (savedKey === "injected" && providers.length === 1)) {
+            targetEth = p;
+            break;
+          }
+        }
+        
+        if (!targetEth && providers.length === 1) {
+          targetEth = providers[0];
+        }
+
+        if (targetEth) {
+          const accounts = await targetEth.request({ method: "eth_accounts" });
+          if (accounts && accounts.length > 0) {
+            await connectSelected(targetEth, savedKey);
+          }
+        }
+      } catch (e) {
+        console.log("Auto-connect error:", e);
+      }
+    };
+
+    const timer = setTimeout(tryAutoConnect, 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   function isArc(id: number | string) {
     return Number(id || 0) === ARC_CHAIN_ID;
@@ -592,51 +688,104 @@ export default function Page() {
     } catch {}
   }
 
+  async function fetchSafeName(safeAddr: string): Promise<string> {
+    try {
+      const iface = new ethers.Interface(FACTORY_ABI);
+      const calldata = iface.encodeFunctionData("getSafeName", [safeAddr]);
+      const response = await fetch(ARC_RPC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_call",
+          params: [{ to: FACTORY_ADDRESS, data: calldata }, "latest"],
+          id: 1,
+        }),
+      });
+      const json = await response.json();
+      if (json.error) return "";
+      const decoded = iface.decodeFunctionResult("getSafeName", json.result);
+      return decoded[0] || "";
+    } catch {
+      return "";
+    }
+  }
+
+  async function saveSafeNameOnChain(safeAddr: string, name: string) {
+    const a = normAddr(safeAddr);
+    if (!a || !signer) return false;
+    
+    setPending((x) => ({ ...x, rename: true }));
+    try {
+      const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signer);
+      const tx = await factory.setSafeName(a, name);
+      await tx.wait();
+      setSafeNames((prev) => ({ ...prev, [a.toLowerCase()]: name }));
+      return true;
+    } catch (e) {
+      console.log("saveSafeNameOnChain error:", e);
+      return false;
+    } finally {
+      setPending((x) => ({ ...x, rename: false }));
+    }
+  }
+
   async function syncSafesFromChain(walletAddr: string, p: any) {
+    console.log("syncSafesFromChain called", walletAddr);
     const w = normAddr(walletAddr);
-    if (!w || !p?.getLogs || !p?.getBlockNumber) return;
+    if (!w) {
+      console.log("syncSafesFromChain: invalid wallet");
+      return;
+    }
 
     setPending((x) => ({ ...x, syncSafes: true }));
     try {
-      const latest = await p.getBlockNumber();
-      const last = getLastScanBlock(w);
-      const start0 = Math.max(FACTORY_FROM_BLOCK, last ? last + 1 : FACTORY_FROM_BLOCK);
-      if (start0 > latest) {
-        setLastScanBlock(w, latest);
-        setCreatedSafes(getSafesForWallet(w));
-        return;
-      }
-
+      console.log("syncSafesFromChain: FACTORY_ADDRESS =", FACTORY_ADDRESS);
+      console.log("syncSafesFromChain: wallet =", w);
+      
       const iface = new ethers.Interface(FACTORY_ABI);
-      const topic0 = ethers.id("SaveCreated(address,address[3])");
+      const calldata = iface.encodeFunctionData("getSafesForOwner", [w]);
+      console.log("syncSafesFromChain: calldata =", calldata);
+      
+      const response = await fetch(ARC_RPC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_call",
+          params: [{ to: FACTORY_ADDRESS, data: calldata }, "latest"],
+          id: 1,
+        }),
+      });
+      const json = await response.json();
+      console.log("syncSafesFromChain: raw response =", json);
+      
+      if (json.error) {
+        throw new Error(json.error.message || "RPC error");
+      }
+      
+      const decoded = iface.decodeFunctionResult("getSafesForOwner", json.result);
+      const safes: string[] = decoded[0];
+      console.log("syncSafesFromChain: got safes", safes);
+      
+      for (const safe of safes) {
+        const addr = normAddr(safe);
+        if (addr) addSafeForWallet(w, addr);
+      }
+      
+      setCreatedSafes(getSafesForWallet(w));
 
-      const step = Math.max(2000, LOG_CHUNK);
-      for (let from = start0; from <= latest; from += step) {
-        const to = Math.min(latest, from + step - 1);
-        let logs: any[] = [];
-        try {
-          logs = await p.getLogs({
-            address: FACTORY_ADDRESS,
-            fromBlock: from,
-            toBlock: to,
-            topics: [topic0],
-          });
-        } catch {
-          logs = [];
-        }
-
-        for (const lg of logs) {
-          try {
-            const parsed = iface.parseLog(lg);
-            const save = normAddr(parsed?.args?.save);
-            const ownersArr = Array.isArray(parsed?.args?.owners) ? parsed.args.owners : [];
-            const hit = ownersArr.some((o: string) => (o || "").toLowerCase() === w.toLowerCase());
-            if (hit && save) addSafeForWallet(w, save);
-          } catch {}
+      const names: Record<string, string> = {};
+      for (const safe of safes) {
+        const addr = normAddr(safe);
+        if (addr) {
+          const name = await fetchSafeName(addr);
+          if (name) names[addr.toLowerCase()] = name;
         }
       }
-
-      setLastScanBlock(w, latest);
+      setSafeNames((prev) => ({ ...prev, ...names }));
+    } catch (e) {
+      console.log("syncSafesFromChain error:", e);
       setCreatedSafes(getSafesForWallet(w));
     } finally {
       setPending((x) => ({ ...x, syncSafes: false }));
@@ -675,6 +824,10 @@ export default function Page() {
       setCreatedSafes(getSafesForWallet(a2));
       setWalletModalOpen(false);
 
+      try {
+        localStorage.setItem(CONNECTED_WALLET_KEY, key);
+      } catch {}
+
       const cid = await readChainIdDirect(eth);
       if (cid) setChainId(cid);
 
@@ -708,6 +861,9 @@ export default function Page() {
     setRowMenuOpenFor("");
     setRenameOpen(false);
     setRemoveOpen(false);
+    try {
+      localStorage.removeItem(CONNECTED_WALLET_KEY);
+    } catch {}
     setPending((x) => ({
       ...x,
       connect: false,
@@ -751,7 +907,7 @@ export default function Page() {
       const u = new URL(window.location.href);
       u.searchParams.set("safe", loadedSafe);
 
-      const n = (getStoredName(loadedSafe) || "").trim();
+      const n = (safeNames[loadedSafe.toLowerCase()] || "").trim();
       if (n) u.searchParams.set("name", n);
       else u.searchParams.delete("name");
 
@@ -802,10 +958,8 @@ export default function Page() {
     try {
       const u = new URL(window.location.href);
       const s = u.searchParams.get("safe") || "";
-      const n = u.searchParams.get("name") || "";
       const a = normAddr(s);
       if (a) {
-        if (n && n.trim()) setStoredName(a, n.trim());
         setSafeAddress(a);
         loadSafe(a);
       }
@@ -1019,7 +1173,13 @@ export default function Page() {
       setOwnerIndex(idx);
       setOwners(ownersArr);
 
-      const n = (getStoredName(a) || "").trim();
+      if (!safeNames[a.toLowerCase()]) {
+        fetchSafeName(a).then((name) => {
+          if (name) setSafeNames((prev) => ({ ...prev, [a.toLowerCase()]: name }));
+        });
+      }
+
+      const n = (safeNames[a.toLowerCase()] || "").trim();
       setSafeParamInUrl(a, n);
 
       const bal = await p.getBalance(a);
@@ -1083,6 +1243,7 @@ export default function Page() {
   }
 
   async function createSafe() {
+    console.log("createSafe called");
     setCreateMsg(null);
     setPending((x) => ({ ...x, createSafe: true }));
 
@@ -1106,9 +1267,15 @@ export default function Page() {
         return false;
       }
 
+      console.log("owner1:", owner1);
+      console.log("owner2:", owner2);
+      console.log("owner3:", owner3);
+      
       const o1 = normAddr(owner1);
       const o2 = normAddr(owner2);
       const o3 = normAddr(owner3);
+      
+      console.log("normalized:", o1, o2, o3);
 
       if (!o1 || !o2 || !o3) {
         setCreateMsg({ kind: "err", text: "Invalid owner address" });
@@ -1129,15 +1296,26 @@ export default function Page() {
       setSigner(s2);
       setWallet(w);
 
+      console.log("creating factory contract");
       const factory: any = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, s2);
+
+      console.log("preparing owners array");
+      const owners: [string, string, string] = [o1, o2, o3];
+      console.log("owners array:", owners);
 
       let predicted: string | null = null;
       try {
-        predicted = await factory.createSave.staticCall([o1, o2, o3]);
+        console.log("calling staticCall");
+        predicted = await factory.createSave.staticCall(owners);
         predicted = normAddr(predicted ?? "") || null;
-      } catch {}
+        console.log("predicted:", predicted);
+      } catch (e) {
+        console.log("staticCall error:", e);
+      }
 
-      const tx = await factory.createSave([o1, o2, o3]);
+      console.log("calling createSave");
+      const tx = await factory.createSave(owners);
+      console.log("tx:", tx);
       const rc = await tx.wait();
 
       let created: string | null = null;
@@ -1161,18 +1339,45 @@ export default function Page() {
         }
       } catch {}
 
-      const safe = created || predicted;
+      let safe = created || predicted;
+      
+      if (!safe) {
+        const iface2 = new ethers.Interface(FACTORY_ABI);
+        const calldata2 = iface2.encodeFunctionData("getSafesForOwner", [w]);
+        const resp2 = await fetch(ARC_RPC_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "eth_call",
+            params: [{ to: FACTORY_ADDRESS, data: calldata2 }, "latest"],
+            id: 1,
+          }),
+        });
+        const json2 = await resp2.json();
+        if (!json2.error && json2.result && json2.result !== "0x") {
+          const decoded2 = iface2.decodeFunctionResult("getSafesForOwner", json2.result);
+          const safes2: string[] = decoded2[0];
+          if (safes2.length > 0) {
+            safe = normAddr(safes2[safes2.length - 1]);
+          }
+        }
+      }
+
       if (!safe) {
         setCreateMsg({ kind: "ok", text: "Safe created", hash: tx.hash });
         setCreateSafeOpen(false);
         setCreateStep(0);
+        await syncSafesFromChain(w, p2);
         return true;
       }
 
       addSafeForWallet(w, safe);
 
       const nm = (newSafeName || "").trim();
-      if (nm) setStoredName(safe, nm);
+      if (nm) {
+        await saveSafeNameOnChain(safe, nm);
+      }
 
       setCreatedSafes(getSafesForWallet(w));
 
@@ -1238,7 +1443,18 @@ export default function Page() {
         return false;
       }
 
-      const value = ethers.parseUnits(txAmount.trim(), NATIVE_DECIMALS);
+      if (txAmount.includes(",")) {
+        setTxMsg({ kind: "err", text: "Invalid value: use \".\" not \",\"" });
+        return false;
+      }
+
+      let value: bigint;
+      try {
+        value = ethers.parseUnits(txAmount.trim(), NATIVE_DECIMALS);
+      } catch {
+        setTxMsg({ kind: "err", text: "Invalid amount format" });
+        return false;
+      }
       if (value <= 0n) {
         setTxMsg({ kind: "err", text: "Amount must be > 0" });
         return false;
@@ -1388,18 +1604,24 @@ export default function Page() {
 
   const safeTitle = useMemo(() => {
     if (!isLoaded || !canView) return "";
-    const n = (getStoredName(loadedSafe) || "").trim();
+    const n = (safeNames[loadedSafe.toLowerCase()] || "").trim();
     return n || "Unnamed Safe";
-  }, [isLoaded, loadedSafe, canView]);
+  }, [isLoaded, loadedSafe, canView, safeNames]);
 
   const filteredSafes = useMemo(() => {
     const q = (safeSearch || "").trim().toLowerCase();
-    if (!q) return createdSafes;
-    return createdSafes.filter((a) => {
-      const n = (getStoredName(a) || "").toLowerCase();
+    let list = createdSafes;
+    if (showHidden) {
+      list = list.filter((a) => isSafeHidden(wallet, a));
+    } else {
+      list = list.filter((a) => !isSafeHidden(wallet, a));
+    }
+    if (!q) return list;
+    return list.filter((a) => {
+      const n = (safeNames[a.toLowerCase()] || "").toLowerCase();
       return a.toLowerCase().includes(q) || n.includes(q);
     });
-  }, [createdSafes, safeSearch]);
+  }, [createdSafes, safeSearch, safeNames, showHidden, wallet]);
 
   const chipStyle: CSSProperties = {
     minWidth: 120,
@@ -1431,8 +1653,8 @@ export default function Page() {
       );
     if (canView)
       return (
-        <span className="chip chipOk" style={chipStyle}>
-          Owner #{ownerIndex + 1}
+        <span className="chip chipOk" style={chipStyle} title={wallet}>
+          Owner {ownerIndex + 1}
         </span>
       );
     if (denied)
@@ -1442,7 +1664,7 @@ export default function Page() {
         </span>
       );
     return null;
-  }, [isLoaded, loadingSafe, access, canView, ownerIndex, denied]);
+  }, [isLoaded, loadingSafe, access, canView, ownerIndex, denied, wallet]);
 
   const copyTipStyle: CSSProperties = {
     position: "absolute",
@@ -1523,7 +1745,7 @@ export default function Page() {
         showClose={false}
       >
         <div className="stackSm" style={{ padding: 2 }}>
-          <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+          <div className="muted" style={{ fontSize: 12, marginTop: 10, textTransform: "uppercase" }}>
             Recipient
           </div>
           <input
@@ -1533,7 +1755,7 @@ export default function Page() {
             onBlur={(e) => setTxTo(e.target.value.trim())}
           />
 
-          <div className="muted" style={{ fontSize: 12 }}>
+          <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
             Amount ({NATIVE_SYMBOL})
           </div>
           <input
@@ -1589,7 +1811,7 @@ export default function Page() {
             </>
           ) : (
             <>
-              <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              <div className="muted" style={{ fontSize: 12, marginTop: 10, textTransform: "uppercase" }}>
                 Owners (3)
               </div>
               <input
@@ -1630,6 +1852,7 @@ export default function Page() {
         open={renameOpen}
         title="Rename safe"
         onClose={() => {
+          if (pending.rename) return;
           setRenameOpen(false);
           setRenameAddr("");
           setRenameValue("");
@@ -1646,33 +1869,39 @@ export default function Page() {
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={(e) => setRenameValue(e.target.value.trim())}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
+            disabled={pending.rename}
+            onKeyDown={async (e) => {
+              if (e.key === "Enter" && !pending.rename) {
                 const a = normAddr(renameAddr);
                 if (!a) return;
                 const v = (renameValue || "").trim();
-                setStoredName(a, v);
-                setRenameOpen(false);
-                setRenameAddr("");
-                setRenameValue("");
+                const ok = await saveSafeNameOnChain(a, v);
+                if (ok) {
+                  setRenameOpen(false);
+                  setRenameAddr("");
+                  setRenameValue("");
+                }
               }
             }}
           />
           <div className="row" style={{ justifyContent: "space-between", marginTop: 12 }}>
             <button
               className="btn"
-              onClick={() => {
+              onClick={async () => {
                 const a = normAddr(renameAddr);
                 if (!a) return;
                 const v = (renameValue || "").trim();
-                setStoredName(a, v);
-                setRenameOpen(false);
-                setRenameAddr("");
-                setRenameValue("");
+                const ok = await saveSafeNameOnChain(a, v);
+                if (ok) {
+                  setRenameOpen(false);
+                  setRenameAddr("");
+                  setRenameValue("");
+                }
               }}
               type="button"
+              disabled={pending.rename}
             >
-              Save
+              {pending.rename ? "Saving..." : "Save"}
             </button>
             <button
               className="btn"
@@ -1682,6 +1911,7 @@ export default function Page() {
                 setRenameValue("");
               }}
               type="button"
+              disabled={pending.rename}
             >
               Cancel
             </button>
@@ -1829,7 +2059,7 @@ export default function Page() {
               }}
             >
               <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                <h2 style={{ margin: 0, fontSize: 22 }}>My Safes</h2>
+                <h2 style={{ margin: 0, fontSize: 22, textTransform: "uppercase" }}>My Safes</h2>
               </div>
 
               <div
@@ -1864,7 +2094,7 @@ export default function Page() {
                     <div className="muted">No safes yet</div>
                   ) : (
                     filteredSafes.map((a, idx) => {
-                      const n = (getStoredName(a) || "").trim();
+                      const n = (safeNames[a.toLowerCase()] || "").trim();
                       const active = loadedSafe && a.toLowerCase() === loadedSafe.toLowerCase();
 
                       const openUp =
@@ -1920,13 +2150,17 @@ export default function Page() {
                         position: "absolute",
                         right: 0,
                         zIndex: 30,
-                        width: 180,
-                        borderRadius: 14,
-                        background:
-                          "radial-gradient(120% 120% at 20% 10%, rgba(64, 120, 255, 0.22), rgba(6, 10, 22, 0.95))",
-                        border: "1px solid rgba(120, 170, 255, 0.18)",
-                        boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+                        borderRadius: 12,
+                        background: "rgba(10, 18, 40, 0.85)",
+                        backdropFilter: "blur(12px)",
+                        WebkitBackdropFilter: "blur(12px)",
+                        border: "1px solid rgba(120, 170, 255, 0.15)",
+                        boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
                         overflow: "hidden",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        padding: 6,
                       };
 
                       const menuWrapStyle: CSSProperties = openUp
@@ -1934,21 +2168,20 @@ export default function Page() {
                         : { ...menuBaseStyle, top: 44 };
 
                       const menuBtnStyle: CSSProperties = {
-                        width: "100%",
                         display: "flex",
                         alignItems: "center",
-                        gap: 10,
-                        padding: "12px 12px",
+                        justifyContent: "center",
+                        padding: 10,
                         background: "transparent",
                         border: "none",
+                        borderRadius: 8,
                         cursor: "pointer",
-                        color: "rgba(255,255,255,0.92)",
-                        fontSize: 13,
-                        textAlign: "left",
+                        color: "rgba(255,255,255,0.8)",
                         outline: "none",
                         boxShadow: "none",
                         appearance: "none",
                         WebkitAppearance: "none",
+                        transition: "background 0.15s ease",
                       };
 
                       return (
@@ -2008,75 +2241,73 @@ export default function Page() {
                             <div style={menuWrapStyle}>
                               <button
                                 type="button"
-                                style={menuBtnStyle}
+                                className="menuIconBtn"
                                 onClick={() => {
                                   setRowMenuOpenFor("");
                                   setRenameAddr(a);
-                                  setRenameValue((getStoredName(a) || "").trim());
+                                  setRenameValue((safeNames[a.toLowerCase()] || "").trim());
                                   setRenameOpen(true);
                                 }}
                               >
-                                <span style={{ width: 18, display: "inline-flex", justifyContent: "center" }}>
-                                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path
-                                      d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0 0-3L16.5 4.5a2.1 2.1 0 0 0-3 0L3 15v5z"
-                                      fill="none"
-                                      stroke="rgba(80,220,170,0.95)"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                  </svg>
-                                </span>
-                                Rename
+                                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                  <path
+                                    d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0 0-3L16.5 4.5a2.1 2.1 0 0 0-3 0L3 15v5z"
+                                    fill="none"
+                                    stroke="rgba(80,220,170,0.9)"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                                <span className="menuIconLabel">Rename</span>
                               </button>
-
-                              <div style={{ height: 1, background: "rgba(120,170,255,0.12)" }} />
 
                               <button
                                 type="button"
-                                style={menuBtnStyle}
+                                className="menuIconBtn"
                                 onClick={() => {
                                   setRowMenuOpenFor("");
-                                  setRemoveAddr(a);
-                                  setRemoveOpen(true);
+                                  if (isSafeHidden(wallet, a)) {
+                                    unhideSafe(wallet, a);
+                                  } else {
+                                    hideSafe(wallet, a);
+                                  }
+                                  setCreatedSafes([...createdSafes]);
                                 }}
                               >
-                                <span style={{ width: 18, display: "inline-flex", justifyContent: "center" }}>
-                                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                  {isSafeHidden(wallet, a) ? (
                                     <path
-                                      d="M3 6h18"
+                                      d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"
                                       fill="none"
-                                      stroke="rgba(255,95,115,0.95)"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                    />
-                                    <path
-                                      d="M8 6V4h8v2"
-                                      fill="none"
-                                      stroke="rgba(255,95,115,0.95)"
+                                      stroke="rgba(80,220,170,0.9)"
                                       strokeWidth="2"
                                       strokeLinecap="round"
                                       strokeLinejoin="round"
                                     />
-                                    <path
-                                      d="M6 6l1 16h10l1-16"
-                                      fill="none"
-                                      stroke="rgba(255,95,115,0.95)"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                    <path
-                                      d="M10 11v6M14 11v6"
-                                      fill="none"
-                                      stroke="rgba(255,95,115,0.95)"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                    />
-                                  </svg>
-                                </span>
-                                Remove
+                                  ) : (
+                                    <>
+                                      <path
+                                        d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                                        fill="none"
+                                        stroke="rgba(160,160,160,0.9)"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                      <line
+                                        x1="1"
+                                        y1="1"
+                                        x2="23"
+                                        y2="23"
+                                        stroke="rgba(160,160,160,0.9)"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                      />
+                                    </>
+                                  )}
+                                </svg>
+                                <span className="menuIconLabel">{isSafeHidden(wallet, a) ? "Unhide" : "Hide"}</span>
                               </button>
                             </div>
                           ) : null}
@@ -2086,9 +2317,9 @@ export default function Page() {
                   )}
                 </div>
 
-                <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
+                <div className="row" style={{ justifyContent: "space-between", marginTop: 6, gap: 8 }}>
                   <button
-                    className="btn"
+                    className="btn btnOk"
                     onClick={() => {
                       setCreateMsg(null);
                       setCreateStep(0);
@@ -2102,17 +2333,22 @@ export default function Page() {
                   >
                     Create new safe
                   </button>
+                  <button
+                    className="btn"
+                    onClick={() => setShowHidden(!showHidden)}
+                    type="button"
+                    style={{ opacity: showHidden ? 1 : 0.6 }}
+                  >
+                    {showHidden ? "Hidden" : "Show all"}
+                  </button>
                 </div>
 
                 <div style={{ height: 14 }} />
 
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Import safe
-                </div>
                 <div className="row">
                   <input
                     className="grow"
-                    placeholder="0x..."
+                    placeholder="Paste safe address"
                     value={importAddr}
                     onChange={(e) => setImportAddr(e.target.value)}
                     onBlur={(e) => setImportAddr(e.target.value.trim())}
@@ -2142,7 +2378,7 @@ export default function Page() {
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-                      <h2 style={{ margin: 0, fontSize: 22, flex: "0 0 auto" }}>Safe</h2>
+                      <h2 style={{ margin: 0, fontSize: 22, flex: "0 0 auto", textTransform: "uppercase" }}>Safe</h2>
                       {isLoaded && canView ? (
                         <div
                           style={{
@@ -2160,20 +2396,29 @@ export default function Page() {
                       ) : null}
                     </div>
 
-                    <div className="muted" style={{ marginTop: 10 }}>
+                    <div className="muted" style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       {isLoaded ? (
                         canView ? (
-                          <span
-                            title="Click to copy"
-                            onClick={() => copySafe(loadedSafe)}
-                            style={{ cursor: "pointer", userSelect: "none" }}
-                          >
-                            {loadedSafe}
-                          </span>
+                          <>
+                            <span style={{ wordBreak: "break-all" }}>
+                              {loadedSafe}
+                            </span>
+                            <button
+                              className="copyIconBtn"
+                              onClick={() => copySafe(loadedSafe)}
+                              type="button"
+                            >
+                              {copiedSafe === loadedSafe ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                              ) : (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                              )}
+                            </button>
+                          </>
                         ) : wallet ? (
                           "Restricted"
                         ) : (
-                          "Connect wallet to view"
+                          <span style={{ textTransform: "uppercase" }}>Connect wallet to view</span>
                         )
                       ) : (
                         "Select a safe from the list"
@@ -2193,114 +2438,83 @@ export default function Page() {
                 </div>
 
                 {isLoaded && canView ? (
-                  <div className="row" style={{ marginTop: 14, justifyContent: "space-between", alignItems: "center" }}>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                      <div style={{ position: "relative", display: "inline-flex" }}>
-                        <IconBtn
-                          onClick={copySafeLink}
-                          onMouseEnter={() => setCopyTipOpen(true)}
-                          onMouseLeave={() => setCopyTipOpen(false)}
-                          onFocus={() => setCopyTipOpen(true)}
-                          onBlur={() => setCopyTipOpen(false)}
-                        >
-                          Copy link
-                        </IconBtn>
-                        {copyTipOpen ? (
-                          <div style={copyTipStyle}>
-                            open and sign from other device
-                            <div style={copyTipArrowStyle} />
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {copiedLink ? <span className="chip chipOk">Copied</span> : null}
-                      {copiedSafe === loadedSafe && loadedSafe ? <span className="chip chipOk">Copied</span> : null}
+                  <>
+                    <div style={{ marginTop: 20 }}>
+                      <span style={{ fontSize: 24, fontWeight: 780 }}>{balance} {NATIVE_SYMBOL}</span>
                     </div>
-
-                    <button
-                      className="btn btnOk"
-                      onClick={() => setTransferOpen(true)}
-                      disabled={!canView}
-                      type="button"
-                      title={!canView ? "Open a safe as owner to create transfers" : "Create a new transfer"}
-                    >
-                      New transfer
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              {isLoaded ? (
-                <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "stretch" }}>
-                  <div className="card" style={{ flex: "1 1 520px", minWidth: 0 }}>
-                    {!canView ? (
-                      <div className="muted">Open as owner to view assets</div>
-                    ) : (
-                      <div className="stackSm">
-                        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div className="muted" style={{ fontSize: 14, marginBottom: 10 }}>
-                              Balance
-                            </div>
-                            <div style={{ fontSize: 22, fontWeight: 780 }}>
-                              {balance} {NATIVE_SYMBOL}
-                            </div>
-                          </div>
-                        </div>
-
-                        <details style={{ marginTop: 10 }}>
-                          <summary style={{ cursor: "pointer", userSelect: "none" }}>Owners (3)</summary>
-                          <div className="stackSm" style={{ marginTop: 12 }}>
-                            {owners.map((o, i) => {
-                              const isMe = wallet && wallet.toLowerCase() === o.toLowerCase();
-                              const isCopied = copiedOwner === o;
-                              return (
-                                <div
-                                  key={i}
-                                  className="row ownerRow"
-                                  role="button"
-                                  tabIndex={0}
-                                  title="Click to copy"
-                                  onClick={() => {
+                    
+                    <div style={{ display: "flex", marginTop: 16, alignItems: "flex-start", justifyContent: "space-between" }}>
+                      <details>
+                        <summary className="ownersBtn" style={{ cursor: "pointer", userSelect: "none", textTransform: "uppercase" }}>Owners</summary>
+                        <div className="stackSm" style={{ marginTop: 12 }}>
+                          {owners.map((o, i) => {
+                            const isMe = wallet && wallet.toLowerCase() === o.toLowerCase();
+                            const isCopied = copiedOwner === o;
+                            return (
+                              <div
+                                key={i}
+                                className="row ownerRow"
+                                role="button"
+                                tabIndex={0}
+                                title="Click to copy"
+                                onClick={() => {
+                                  try {
+                                    navigator.clipboard.writeText(o);
+                                    setCopiedOwner(o);
+                                    setTimeout(() => setCopiedOwner(""), 900);
+                                  } catch {}
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
                                     try {
                                       navigator.clipboard.writeText(o);
                                       setCopiedOwner(o);
                                       setTimeout(() => setCopiedOwner(""), 900);
                                     } catch {}
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      try {
-                                        navigator.clipboard.writeText(o);
-                                        setCopiedOwner(o);
-                                        setTimeout(() => setCopiedOwner(""), 900);
-                                      } catch {}
-                                    }
-                                  }}
-                                  style={{ userSelect: "none" }}
-                                >
-                                  <span className={isMe ? "ok" : ""}>{o}</span>
-                                  <span className="muted" style={{ fontSize: 12 }}>
-                                    {isCopied ? "Copied" : "Copy"}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </details>
-                      </div>
-                    )}
-                  </div>
+                                  }
+                                }}
+                                style={{ userSelect: "none" }}
+                              >
+                                <span className={isMe ? "ok" : ""}>{o}</span>
+                                <span className="ownerCopyBtn">
+                                  {isCopied ? (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                  ) : (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </details>
+                      
+                      <button
+                        className="btn btnOk"
+                        onClick={() => setTransferOpen(true)}
+                        disabled={!canView}
+                        type="button"
+                        title={!canView ? "Open a safe as owner to create transfers" : "Create a new transfer"}
+                      >
+                        New transfer
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
+              {isLoaded ? (
+                <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "stretch" }}>
 
                   <div className="card" style={{ flex: "1 1 520px", minWidth: 0 }}>
-                    <div className="muted" style={{ fontSize: 14, marginBottom: 14 }}>
+                    <div className="muted" style={{ fontSize: 14, marginBottom: 14, textTransform: "uppercase" }}>
                       Transactions
                     </div>
 
                     <Msg m={txMsg} />
 
                     {!canView ? (
-                      <div className="muted">Open as owner to view transactions</div>
+                      <div className="muted" style={{ textTransform: "uppercase" }}>Open as owner to view transactions</div>
                     ) : txs.length === 0 ? (
                       <div className="muted">No transactions</div>
                     ) : (
@@ -2317,36 +2531,39 @@ export default function Page() {
                           const sigs = txConfirmedByOwner?.[t.id] || [];
                           const meConfirmed = ownerIndex >= 0 ? !!sigs[ownerIndex] : false;
 
-                          const status = t.executed
-                            ? "Executed"
+                          const statusText = t.executed
+                            ? null
                             : t.confirms >= THRESHOLD
                             ? "Ready to execute"
-                            : `Waiting for confirmations (${Math.max(0, t.confirms)}/${THRESHOLD})`;
+                            : `Waiting for confirmations ${Math.max(0, t.confirms)}/${THRESHOLD}`;
+                          const statusIcon = t.executed ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(80,220,170,0.6)" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                          ) : null;
 
                           return (
                             <div key={t.id} className="txItem">
-                              <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontWeight: 780 }}>
-                                    TX #{t.id}{" "}
-                                    <span className="muted" style={{ fontWeight: 600 }}>
-                                      • {status}
-                                    </span>
+                              <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                                <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+                                  <div style={{ fontWeight: 780, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+                                    TX {t.id}
+                                    {statusIcon ? (
+                                      <span style={{ display: "inline-flex", alignItems: "center" }}>{statusIcon}</span>
+                                    ) : (
+                                      <span className={`muted ${statusText?.startsWith("Waiting") ? "blinkText" : ""}`} style={{ fontWeight: 600, textTransform: "uppercase" }}>
+                                        • {statusText}
+                                      </span>
+                                    )}
                                   </div>
-                                  <div
-                                    className="muted"
-                                    style={{
-                                      fontSize: 12,
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    to {short(t.to)} • {ethers.formatUnits(t.amount, NATIVE_DECIMALS)} {NATIVE_SYMBOL} •
-                                    signatures {t.confirms}/{THRESHOLD}
+                                  
+                                  <div style={{ fontSize: 14 }}>
+                                    {ethers.formatUnits(t.amount, NATIVE_DECIMALS)} {NATIVE_SYMBOL} → {short(t.to)}
+                                  </div>
+                                  
+                                  <div className="muted" style={{ fontSize: 13, textTransform: "uppercase" }}>
+                                    Signatures: {t.confirms}/{THRESHOLD}
                                   </div>
 
-                                  <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                                  <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                                     {owners.map((o, i) => {
                                       const ok = !!sigs[i];
                                       const me = i === ownerIndex;
@@ -2361,11 +2578,15 @@ export default function Page() {
                                             padding: "6px 10px",
                                             fontSize: 12,
                                             opacity: ok ? 1 : 0.7,
+                                            ...(me && ok ? { 
+                                              background: "rgba(80,220,170,0.1)", 
+                                              borderColor: "rgba(80,220,170,0.5)",
+                                              fontWeight: 700
+                                            } : {})
                                           }}
                                           title={o}
                                         >
                                           {me ? "You" : `Owner ${i + 1}`}
-                                          {ok ? " ✓" : ""}
                                         </span>
                                       );
                                     })}
@@ -2373,16 +2594,6 @@ export default function Page() {
                                 </div>
 
                                 <div className="row" style={{ gap: 8, flex: "0 0 auto" }}>
-                                  {u ? (
-                                    <a
-                                      href={u}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      style={{ opacity: 0.85, fontSize: 12 }}
-                                    >
-                                      View in Explorer
-                                    </a>
-                                  ) : null}
                                   {!t.executed ? (
                                     <>
                                       <button
@@ -2408,6 +2619,19 @@ export default function Page() {
                                   ) : null}
                                 </div>
                               </div>
+                              {u ? (
+                                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                                  <a
+                                    href={u}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btnXs"
+                                    style={{ textDecoration: "none", fontSize: 11 }}
+                                  >
+                                    View in explorer
+                                  </a>
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}
