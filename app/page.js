@@ -142,7 +142,7 @@ export default function Page() {
 
               <a
                 className="footerX"
-                href="https://github.com/EthernalBuddha/ARCsafe2"
+                href="https://github.com/EthernalBuddha/FORT"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="GitHub"
