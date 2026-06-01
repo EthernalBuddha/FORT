@@ -51,7 +51,7 @@ export default function Page() {
               <div className="howCard">
                 <div className="howNum">1</div>
                 <div className="howTitle">Create or load a safe</div>
-                <div className="howText">Set owners and a threshold (e.g. 2 of 3)</div>
+                <div className="howText">Choose 3 owners — transfers need 2-of-3 confirmations</div>
               </div>
 
               <div className="howCard">
@@ -121,7 +121,7 @@ export default function Page() {
 
         <footer className="footer">
           <div className="footerBar">
-            <div className="footerText">© 2025 FORT · Built on Arc Network · All rights reserved.</div>
+            <div className="footerText">© 2025–2026 FORT · Built on Arc Network · All rights reserved.</div>
 
             <div className="footerIcons">
               <a
