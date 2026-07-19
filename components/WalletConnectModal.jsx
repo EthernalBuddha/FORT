@@ -64,6 +64,7 @@ export default function WalletConnectModal({ open, onClose, onSelect }) {
   const [injected, setInjected] = useState([]);
   const [busyId, setBusyId] = useState("");
   const [note, setNote] = useState("");
+  const [query, setQuery] = useState("");
 
   useEffect(() => setMounted(true), []);
 
@@ -115,6 +116,13 @@ export default function WalletConnectModal({ open, onClose, onSelect }) {
   }, [open]);
 
   useEffect(() => {
+    if (!open) {
+      setQuery("");
+      setNote("");
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
       if (e.key === "Escape" && !busyId) onClose?.();
@@ -138,13 +146,23 @@ export default function WalletConnectModal({ open, onClose, onSelect }) {
       if (id && !providerById[id]) providerById[id] = p;
     }
 
-    return CATALOG.map((c) => ({
+    const mapped = CATALOG.map((c) => ({
       ...c,
       provider: providerById[c.id] || null,
       available: !!providerById[c.id],
       key: `wallet:${c.id}`,
     }));
+
+    // Installed wallets first (stable order otherwise)
+    mapped.sort((a, b) => (b.available ? 1 : 0) - (a.available ? 1 : 0));
+    return mapped;
   }, [announced, injected]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((w) => w.name.toLowerCase().includes(q));
+  }, [list, query]);
 
   if (!open || !mounted) return null;
 
@@ -174,57 +192,83 @@ export default function WalletConnectModal({ open, onClose, onSelect }) {
           </button>
         </div>
 
+        <div className={styles.searchWrap}>
+          <svg
+            className={styles.searchIcon}
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            className={styles.search}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Search through ${list.length} wallets...`}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+
         <div className={styles.body}>
           <div className={styles.list}>
-            {list.map((w) => {
-              const isBusy = busyId === w.id;
-              const disabled = !!busyId || !w.available;
-              const showDetected = w.available && !isBusy;
-              const isBig = w.id === "phantom" || w.id === "rainbow";
-              const isCoinbase = w.id === "coinbase";
+            {filtered.length === 0 ? (
+              <div className={styles.empty}>No wallets found</div>
+            ) : (
+              filtered.map((w) => {
+                const isBig = w.id === "phantom" || w.id === "rainbow";
+                const isCoinbase = w.id === "coinbase";
+                const disabled = !!busyId && busyId !== w.id;
 
-              const metaText = isBusy ? "Connecting…" : w.available ? "Detected" : "Not detected";
-              const metaStyle = showDetected ? { color: "rgba(170,255,220,0.78)" } : undefined;
-
-              return (
-                <button
-                  key={w.key}
-                  type="button"
-                  className={styles.item}
-                  disabled={disabled}
-                  onClick={async () => {
-                    if (!w.available) return;
-                    setNote("");
-                    setBusyId(w.id);
-                    try {
-                      const ok = await onSelect?.(w.provider, w.id);
-                      if (ok) onClose?.();
-                      else setNote("Open your wallet and try again.");
-                    } catch {
-                      setNote("Open your wallet and try again.");
-                    } finally {
-                      setBusyId("");
-                    }
-                  }}
-                >
-                  <div className={styles.left}>
-                    <div className={`${styles.iconWrap} ${isCoinbase ? styles.iconWrapCoinbase : ""}`}>
-                      {w.icon ? (
-                        <img
-                          className={`${styles.icon} ${isBig ? styles.iconBig : ""} ${isCoinbase ? styles.iconCoinbase : ""}`}
-                          src={w.icon}
-                          alt=""
-                        />
-                      ) : null}
+                return (
+                  <button
+                    key={w.key}
+                    type="button"
+                    className={styles.item}
+                    disabled={disabled}
+                    onClick={async () => {
+                      setNote("");
+                      if (!w.available) {
+                        setNote(`${w.name} is not installed.`);
+                        return;
+                      }
+                      setBusyId(w.id);
+                      try {
+                        const ok = await onSelect?.(w.provider, w.id);
+                        if (ok) onClose?.();
+                        else setNote("Open your wallet and try again.");
+                      } catch {
+                        setNote("Open your wallet and try again.");
+                      } finally {
+                        setBusyId("");
+                      }
+                    }}
+                  >
+                    <div className={styles.left}>
+                      <div className={`${styles.iconWrap} ${isCoinbase ? styles.iconWrapCoinbase : ""}`}>
+                        {w.icon ? (
+                          <img
+                            className={`${styles.icon} ${isBig ? styles.iconBig : ""} ${isCoinbase ? styles.iconCoinbase : ""}`}
+                            src={w.icon}
+                            alt=""
+                          />
+                        ) : null}
+                      </div>
+                      <div className={styles.name}>{w.name}</div>
                     </div>
-                    <div className={styles.name}>{w.name}</div>
-                  </div>
-                  <div className={styles.meta} style={metaStyle}>
-                    {metaText}
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })
+            )}
           </div>
 
           {note ? <div className={styles.note}>{note}</div> : null}
