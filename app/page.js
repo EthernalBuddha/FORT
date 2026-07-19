@@ -33,10 +33,46 @@ export default function Page() {
             <h1 className="h1">A fortress for your assets</h1>
             <p className="sub">Multisig wallet for secure onchain payments</p>
 
+            <div className="heroChips">
+              <span className="heroChip">Non-custodial</span>
+              <span className="heroChip">2-of-3 multisig</span>
+              <span className="heroChip">Built on Arc</span>
+            </div>
+
             <div className="ctaRow">
               <a className="btnPrimary" href="/safe" target="_blank" rel="noopener noreferrer">
                 Launch App
               </a>
+            </div>
+
+            <div className="heroPreview" aria-hidden="true">
+              <div className="previewCard">
+                <div className="previewTop">
+                  <div className="previewName">
+                    <span className="previewDot" />
+                    Main Safe
+                  </div>
+                  <span className="previewBadge">Arc Testnet</span>
+                </div>
+
+                <div className="previewBalance">
+                  1,250.00 <span>USDC</span>
+                </div>
+
+                <div className="previewTx">
+                  <div className="previewTxLeft">
+                    <div className="previewTxTitle">Transfer · 250 USDC</div>
+                    <div className="previewTxSub">Waiting for confirmations</div>
+                  </div>
+                  <span className="previewTxChip">1 / 2</span>
+                </div>
+
+                <div className="previewOwners">
+                  <span className="previewOwner on">Owner 1</span>
+                  <span className="previewOwner">Owner 2</span>
+                  <span className="previewOwner">Owner 3</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -121,7 +157,7 @@ export default function Page() {
 
         <footer className="footer">
           <div className="footerBar">
-            <div className="footerText">© 2025–2026 FORT · Built on Arc Network · All rights reserved.</div>
+            <div className="footerText">© 2025–2026 FORT · Built on Arc · All rights reserved.</div>
 
             <div className="footerIcons">
               <a
@@ -342,7 +378,29 @@ export default function Page() {
             0 18px 60px rgba(0,0,0,0.52);
         }
 
-        .ctaRow{ margin-top:66px; display:flex; justify-content:center; }
+        .heroChips{
+          margin:22px auto 0;
+          display:flex;
+          flex-wrap:wrap;
+          justify-content:center;
+          gap:10px;
+        }
+        .heroChip{
+          display:inline-flex;
+          align-items:center;
+          height:30px;
+          padding:0 14px;
+          border-radius:999px;
+          border:1px solid rgba(255,255,255,0.12);
+          background:rgba(255,255,255,0.05);
+          color:rgba(255,255,255,0.80);
+          font-size:12px;
+          font-weight:650;
+          letter-spacing:.02em;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        .ctaRow{ margin-top:30px; display:flex; justify-content:center; }
 
         .btnPrimary{
           text-decoration:none;
@@ -361,6 +419,127 @@ export default function Page() {
         .btnPrimary:hover{
           background:rgba(255,255,255,0.12);
           border-color:rgba(255,255,255,0.24);
+        }
+
+        .heroPreview{
+          margin:44px auto 0;
+          width:min(560px, 100%);
+          perspective:1200px;
+        }
+        .previewCard{
+          border-radius:22px;
+          border:1px solid rgba(255,255,255,0.10);
+          background:linear-gradient(180deg, rgba(14,22,40,0.72), rgba(10,16,28,0.55));
+          backdrop-filter:blur(14px);
+          padding:20px;
+          text-align:left;
+          box-shadow:0 40px 120px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .previewTop{
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:12px;
+        }
+        .previewName{
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          font-weight:950;
+          font-size:14px;
+          color:rgba(255,255,255,0.92);
+        }
+        .previewDot{
+          width:10px;
+          height:10px;
+          border-radius:999px;
+          background:rgba(80,220,170,0.9);
+          box-shadow:0 0 10px rgba(80,220,170,0.7);
+        }
+        .previewBadge{
+          display:inline-flex;
+          align-items:center;
+          height:26px;
+          padding:0 12px;
+          border-radius:999px;
+          border:1px solid rgba(80,220,170,0.35);
+          background:rgba(80,220,170,0.10);
+          color:rgba(170,240,215,0.95);
+          font-size:11px;
+          font-weight:650;
+          letter-spacing:.03em;
+        }
+        .previewBalance{
+          margin-top:18px;
+          font-size:34px;
+          font-weight:950;
+          letter-spacing:-.02em;
+          color:rgba(255,255,255,0.96);
+        }
+        .previewBalance span{
+          font-size:16px;
+          font-weight:700;
+          color:rgba(255,255,255,0.55);
+          margin-left:4px;
+        }
+        .previewTx{
+          margin-top:18px;
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:12px;
+          padding:14px;
+          border-radius:16px;
+          border:1px solid rgba(255,255,255,0.08);
+          background:rgba(255,255,255,0.04);
+        }
+        .previewTxTitle{
+          font-weight:780;
+          font-size:13px;
+          color:rgba(255,255,255,0.90);
+        }
+        .previewTxSub{
+          margin-top:4px;
+          font-size:12px;
+          color:rgba(255,255,255,0.55);
+          text-transform:uppercase;
+          letter-spacing:.03em;
+        }
+        .previewTxChip{
+          flex:0 0 auto;
+          display:inline-flex;
+          align-items:center;
+          height:28px;
+          padding:0 12px;
+          border-radius:999px;
+          border:1px solid rgba(255,190,120,0.40);
+          background:rgba(255,190,120,0.10);
+          color:rgba(255,215,170,0.95);
+          font-size:12px;
+          font-weight:700;
+        }
+        .previewOwners{
+          margin-top:14px;
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+        }
+        .previewOwner{
+          display:inline-flex;
+          align-items:center;
+          height:28px;
+          padding:0 12px;
+          border-radius:999px;
+          border:1px solid rgba(255,255,255,0.10);
+          background:rgba(255,255,255,0.04);
+          color:rgba(255,255,255,0.60);
+          font-size:12px;
+          font-weight:650;
+        }
+        .previewOwner.on{
+          border-color:rgba(80,220,170,0.45);
+          background:rgba(80,220,170,0.10);
+          color:rgba(170,240,215,0.95);
         }
 
         .section{ padding-top:16px; }
@@ -549,7 +728,7 @@ export default function Page() {
         @media (max-width:980px){
           .h1{ font-size:40px; }
           .navLink{ display:none; }
-          .ctaRow{ margin-top:54px; }
+          .ctaRow{ margin-top:26px; }
           .hero{ padding-bottom:72px; }
           .topBarInner{ padding:16px 18px; }
           .howGrid{ grid-template-columns:1fr; }
@@ -557,6 +736,8 @@ export default function Page() {
           .container{ padding:22px 18px 0; }
           .footerBar{ padding:14px 18px; }
           .footerText{ letter-spacing:.02em; }
+          .heroPreview{ margin-top:32px; }
+          .previewBalance{ font-size:28px; }
         }
       `}</style>
     </div>
