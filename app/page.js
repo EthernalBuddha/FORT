@@ -55,19 +55,38 @@ export default function Page() {
 
             <div className="howGrid">
               <div className="howCard">
-                <div className="howNum">1</div>
+                <div className="howIcon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+                    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+                    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+                  </svg>
+                </div>
+                <div className="howStep">Step 1</div>
                 <div className="howTitle">Create or load a safe</div>
                 <div className="howText">Choose 3 owners — transfers need 2-of-3 confirmations</div>
               </div>
 
               <div className="howCard">
-                <div className="howNum">2</div>
+                <div className="howIcon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m22 2-7 20-4-9-9-4Z" />
+                    <path d="M22 2 11 13" />
+                  </svg>
+                </div>
+                <div className="howStep">Step 2</div>
                 <div className="howTitle">Propose a transfer</div>
                 <div className="howText">Any owner can create a proposal</div>
               </div>
 
               <div className="howCard">
-                <div className="howNum">3</div>
+                <div className="howIcon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <path d="m9 11 3 3L22 4" />
+                  </svg>
+                </div>
+                <div className="howStep">Step 3</div>
                 <div className="howTitle">Confirm, then execute</div>
                 <div className="howText">Execute once the threshold is reached</div>
               </div>
@@ -168,6 +187,8 @@ export default function Page() {
 
       <style>{`
         .page{
+          --accent:#5aa2ff;
+          --accent-strong:#3b82f6;
           min-height:100vh;
           position:relative;
           overflow:hidden;
@@ -217,6 +238,11 @@ export default function Page() {
           background:radial-gradient(980px 700px at 55% 45%, transparent 0, rgba(6,10,20,0.18) 55%, rgba(6,10,20,0.90) 100%);
         }
         .page > *:not(.bg){ position:relative; z-index:1; }
+
+        @keyframes fadeUp{
+          from{ opacity:0; transform:translateY(14px); }
+          to{ opacity:1; transform:none; }
+        }
 
         .topBar{
           position:sticky;
@@ -296,20 +322,25 @@ export default function Page() {
           color:rgba(255,255,255,0.92);
           font-size:13px;
           box-shadow:inset 0 1px 0 rgba(255,255,255,0.10);
+          transition:background .15s ease, border-color .15s ease;
         }
         .btn:hover{ background:rgba(255,255,255,0.09); border-color:rgba(255,255,255,0.20); }
         .btnXs{ height:30px; padding:0 12px; font-size:12px; }
 
         .hero{
-          min-height:66vh;
+          min-height:52vh;
           display:flex;
           align-items:center;
           justify-content:center;
           text-align:center;
-          padding:54px 0 64px;
+          padding:36px 0 48px;
           position:relative;
         }
-        .heroInner{ width:min(980px, 100%); padding:10px 18px 6px; }
+        .heroInner{
+          width:min(980px, 100%);
+          padding:10px 18px 6px;
+          animation:fadeUp .6s ease both;
+        }
 
         .h1{
           margin:0;
@@ -368,7 +399,9 @@ export default function Page() {
           font-weight:650;
           letter-spacing:.02em;
           box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
+          transition:border-color .15s ease, color .15s ease;
         }
+        .heroChip:hover{ border-color:rgba(90,162,255,0.45); color:rgba(255,255,255,0.95); }
 
         .ctaRow{ margin-top:30px; display:flex; justify-content:center; }
 
@@ -377,19 +410,23 @@ export default function Page() {
           display:inline-flex;
           align-items:center;
           justify-content:center;
-          height:44px;
-          padding:0 18px;
+          height:46px;
+          padding:0 26px;
           border-radius:999px;
-          border:1px solid rgba(255,255,255,0.16);
-          background:rgba(255,255,255,0.10);
-          color:rgba(255,255,255,0.94);
-          font-weight:650;
-          box-shadow:inset 0 1px 0 rgba(255,255,255,0.10), 0 24px 80px rgba(0,0,0,0.35);
+          border:1px solid rgba(120,170,255,0.55);
+          background:linear-gradient(180deg, var(--accent), var(--accent-strong));
+          color:#ffffff;
+          font-weight:700;
+          letter-spacing:.01em;
+          box-shadow:0 12px 34px rgba(59,130,246,0.38), inset 0 1px 0 rgba(255,255,255,0.28);
+          transition:transform .12s ease, box-shadow .15s ease, filter .15s ease;
         }
         .btnPrimary:hover{
-          background:rgba(255,255,255,0.12);
-          border-color:rgba(255,255,255,0.24);
+          filter:brightness(1.07);
+          transform:translateY(-1px);
+          box-shadow:0 16px 40px rgba(59,130,246,0.46), inset 0 1px 0 rgba(255,255,255,0.30);
         }
+        .btnPrimary:active{ transform:translateY(0); }
 
         .section{ padding-top:16px; }
 
@@ -421,31 +458,44 @@ export default function Page() {
           border-radius:18px;
           border:1px solid rgba(255,255,255,0.08);
           background:rgba(255,255,255,0.04);
-          padding:16px 16px 18px;
+          padding:18px 16px 20px;
           box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
           display:flex;
           flex-direction:column;
           align-items:center;
           text-align:center;
           min-height:120px;
+          transition:transform .16s ease, border-color .16s ease, background .16s ease;
         }
-        .howNum{
-          width:34px;
-          height:34px;
+        .howCard:hover{
+          transform:translateY(-4px);
+          border-color:rgba(120,170,255,0.22);
+          background:rgba(255,255,255,0.06);
+        }
+        .howIcon{
+          width:46px;
+          height:46px;
           display:flex;
           align-items:center;
           justify-content:center;
-          border-radius:12px;
-          border:1px solid rgba(255,255,255,0.12);
-          background:rgba(255,255,255,0.06);
-          font-weight:950;
-          font-size:13px;
-          color:rgba(255,255,255,0.90);
+          border-radius:14px;
+          border:1px solid rgba(120,170,255,0.28);
+          background:rgba(90,162,255,0.12);
+          color:#8bb8ff;
           box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
           flex:0 0 auto;
         }
+        .howIcon svg{ display:block; }
+        .howStep{
+          margin-top:12px;
+          font-size:11px;
+          font-weight:800;
+          letter-spacing:.14em;
+          text-transform:uppercase;
+          color:#7fa9e6;
+        }
         .howTitle{
-          margin-top:10px;
+          margin-top:6px;
           font-weight:950;
           font-size:13px;
           letter-spacing:.01em;
@@ -466,7 +516,9 @@ export default function Page() {
           background:rgba(255,255,255,0.04);
           box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
           overflow:hidden;
+          transition:border-color .16s ease, background .16s ease;
         }
+        .faqItem:hover{ border-color:rgba(120,170,255,0.20); background:rgba(255,255,255,0.055); }
         .faqSummary{
           list-style:none;
           cursor:pointer;
@@ -478,12 +530,12 @@ export default function Page() {
         .faqSummary::marker{ content:""; }
         .faqQ{
           display:block;
-          text-align:center;
+          text-align:left;
           font-weight:950;
           font-size:13px;
           color:rgba(255,255,255,0.92);
           letter-spacing:.01em;
-          padding:0 32px;
+          padding:0 40px 0 0;
         }
         .faqIcon{
           width:18px;
@@ -516,7 +568,7 @@ export default function Page() {
           color:rgba(255,255,255,0.68);
           font-size:13px;
           line-height:1.45;
-          text-align:center;
+          text-align:left;
         }
         details[open] .faqA{
           border-top:1px solid rgba(255,255,255,0.06);
@@ -565,6 +617,7 @@ export default function Page() {
           background:transparent;
           color:rgba(255,255,255,0.70);
           text-decoration:none;
+          transition:color .15s ease;
         }
         .footerX:hover{ color:rgba(255,255,255,0.90); }
         .footerX:focus-visible{
@@ -578,13 +631,18 @@ export default function Page() {
           .h1{ font-size:40px; }
           .navLink{ display:none; }
           .ctaRow{ margin-top:26px; }
-          .hero{ padding-bottom:72px; }
+          .hero{ padding-bottom:56px; }
           .topBarInner{ padding:16px 18px; }
           .howGrid{ grid-template-columns:1fr; }
           .howText{ max-width:48ch; }
           .container{ padding:22px 18px 0; }
           .footerBar{ padding:14px 18px; }
           .footerText{ letter-spacing:.02em; }
+        }
+
+        @media (prefers-reduced-motion: reduce){
+          .heroInner{ animation:none; }
+          .howCard, .btnPrimary, .faqItem{ transition:none; }
         }
       `}</style>
     </div>
