@@ -42,8 +42,11 @@ const SAFE_ABI = [
   "function owners(uint256) view returns (address)",
   "function txs(uint256) view returns (address to, uint256 amount, bool executed, uint8 confirms)",
   "function confirmed(uint256, address) view returns (bool)",
+  "function canceled(uint256) view returns (bool)",
   "function createTx(address to, uint256 amount) returns (uint256)",
   "function confirmTx(uint256 id)",
+  "function revokeConfirm(uint256 id)",
+  "function cancelTx(uint256 id)",
   "function executeTx(uint256 id)",
 ];
 
@@ -455,7 +458,6 @@ function PortalModal({
     document.body
   );
 }
-
 export default function Page() {
   const providersRef = useRef<Record<string, any>>({});
   const ethRef = useRef<any>(null);
@@ -492,6 +494,7 @@ export default function Page() {
   >([]);
   const [txHashes, setTxHashes] = useState<Record<number, string>>({});
   const [txConfirmedByOwner, setTxConfirmedByOwner] = useState<Record<number, boolean[]>>({});
+  const [txCanceled, setTxCanceled] = useState<Record<number, boolean>>({});
 
   const [txTo, setTxTo] = useState("");
   const [txAmount, setTxAmount] = useState("");
@@ -513,7 +516,7 @@ export default function Page() {
     connect: false,
     createSafe: false,
     createTx: false,
-    txAction: null as null | { id: number; action: "confirm" | "execute" },
+    txAction: null as null | { id: number; action: "confirm" | "execute" | "revoke" | "cancel" },
     switchNet: false,
     syncSafes: false,
     rename: false,
@@ -549,7 +552,7 @@ export default function Page() {
         if (!eth) return;
 
         const providers = Array.isArray(eth?.providers) && eth.providers.length ? eth.providers : eth ? [eth] : [];
-        
+
         let targetEth = null;
         for (const p of providers) {
           const name = p?.isMetaMask ? "metamask" : p?.isRabby ? "rabby" : p?.isCoinbaseWallet ? "coinbase" : "";
@@ -558,7 +561,7 @@ export default function Page() {
             break;
           }
         }
-        
+
         if (!targetEth && providers.length === 1) {
           targetEth = providers[0];
         }
@@ -714,7 +717,7 @@ export default function Page() {
   async function saveSafeNameOnChain(safeAddr: string, name: string) {
     const a = normAddr(safeAddr);
     if (!a || !signer) return false;
-    
+
     setPending((x) => ({ ...x, rename: true }));
     try {
       const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signer);
@@ -742,11 +745,11 @@ export default function Page() {
     try {
       console.log("syncSafesFromChain: FACTORY_ADDRESS =", FACTORY_ADDRESS);
       console.log("syncSafesFromChain: wallet =", w);
-      
+
       const iface = new ethers.Interface(FACTORY_ABI);
       const calldata = iface.encodeFunctionData("getSafesForOwner", [w]);
       console.log("syncSafesFromChain: calldata =", calldata);
-      
+
       const response = await fetch(ARC_RPC_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -759,20 +762,20 @@ export default function Page() {
       });
       const json = await response.json();
       console.log("syncSafesFromChain: raw response =", json);
-      
+
       if (json.error) {
         throw new Error(json.error.message || "RPC error");
       }
-      
+
       const decoded = iface.decodeFunctionResult("getSafesForOwner", json.result);
       const safes: string[] = decoded[0];
       console.log("syncSafesFromChain: got safes", safes);
-      
+
       for (const safe of safes) {
         const addr = normAddr(safe);
         if (addr) addSafeForWallet(w, addr);
       }
-      
+
       setCreatedSafes(getSafesForWallet(w));
 
       const names: Record<string, string> = {};
@@ -855,6 +858,7 @@ export default function Page() {
     setTxs([]);
     setTxHashes({});
     setTxConfirmedByOwner({});
+    setTxCanceled({});
     setBalance("0");
     setWalletProviderKey("");
     ethRef.current = null;
@@ -934,6 +938,7 @@ export default function Page() {
         setTxs([]);
         setTxHashes({});
         setTxConfirmedByOwner({});
+        setTxCanceled({});
         setBalance("0");
         setAccess("none");
         setOwnerIndex(-1);
@@ -1054,7 +1059,6 @@ export default function Page() {
       } catch {}
     };
   }, [walletProviderKey, loadedSafe]);
-
   async function loadSafe(addr: string, override?: { provider?: any; signer?: any }, walletAddr?: string) {
     setSafeErr("");
     setLoadingSafe(true);
@@ -1093,6 +1097,7 @@ export default function Page() {
         setTxs([]);
         setTxHashes({});
         setTxConfirmedByOwner({});
+        setTxCanceled({});
         setBalance("0");
         setSafeErr(`Wrong network. Switch to Arc Testnet (${ARC_CHAIN_ID}).`);
         setLoadingSafe(false);
@@ -1107,6 +1112,7 @@ export default function Page() {
         setTxs([]);
         setTxHashes({});
         setTxConfirmedByOwner({});
+        setTxCanceled({});
         setBalance("0");
         setSafeErr("No contract at this address on current network");
         setLoadingSafe(false);
@@ -1120,6 +1126,7 @@ export default function Page() {
         setTxs([]);
         setTxHashes({});
         setTxConfirmedByOwner({});
+        setTxCanceled({});
         setBalance("0");
         setSafeErr("");
         setLoadingSafe(false);
@@ -1144,6 +1151,7 @@ export default function Page() {
         setTxs([]);
         setTxHashes({});
         setTxConfirmedByOwner({});
+        setTxCanceled({});
         setBalance("0");
         setSafeErr("Access denied. You are not an owner of this safe.");
         setLoadingSafe(false);
@@ -1163,6 +1171,7 @@ export default function Page() {
         setTxs([]);
         setTxHashes({});
         setTxConfirmedByOwner({});
+        setTxCanceled({});
         setBalance("0");
         setSafeErr("Access denied. You are not an owner of this safe.");
         setLoadingSafe(false);
@@ -1226,6 +1235,17 @@ export default function Page() {
       }
       setTxConfirmedByOwner(sigMap);
 
+      const cancelMap: Record<number, boolean> = {};
+      for (const it of items) {
+        try {
+          const c = await reader.canceled(it.id, { from });
+          cancelMap[it.id] = !!c;
+        } catch {
+          cancelMap[it.id] = false;
+        }
+      }
+      setTxCanceled(cancelMap);
+
       addSafeForWallet(activeWallet, a);
       setCreatedSafes(getSafesForWallet(activeWallet));
     } catch (e) {
@@ -1235,6 +1255,7 @@ export default function Page() {
       setTxs([]);
       setTxHashes({});
       setTxConfirmedByOwner({});
+      setTxCanceled({});
       setBalance("0");
       setSafeErr(errText(e));
     } finally {
@@ -1270,11 +1291,11 @@ export default function Page() {
       console.log("owner1:", owner1);
       console.log("owner2:", owner2);
       console.log("owner3:", owner3);
-      
+
       const o1 = normAddr(owner1);
       const o2 = normAddr(owner2);
       const o3 = normAddr(owner3);
-      
+
       console.log("normalized:", o1, o2, o3);
 
       if (!o1 || !o2 || !o3) {
@@ -1340,7 +1361,7 @@ export default function Page() {
       } catch {}
 
       let safe = created || predicted;
-      
+
       if (!safe) {
         const iface2 = new ethers.Interface(FACTORY_ABI);
         const calldata2 = iface2.encodeFunctionData("getSafesForOwner", [w]);
@@ -1444,7 +1465,7 @@ export default function Page() {
       }
 
       if (txAmount.includes(",")) {
-        setTxMsg({ kind: "err", text: "Invalid value: use \".\" not \",\"" });
+        setTxMsg({ kind: "err", text: 'Invalid value: use "." not ","' });
         return false;
       }
 
@@ -1546,6 +1567,106 @@ export default function Page() {
     }
   }
 
+  async function revokeConfirm(id: number) {
+    setTxMsg(null);
+    setPending((x) => ({ ...x, txAction: { id, action: "revoke" } }));
+    try {
+      if (!wallet || !signer) {
+        setTxMsg({ kind: "err", text: "Connect wallet first" });
+        return;
+      }
+      if (!loadedSafe) {
+        setTxMsg({ kind: "err", text: "Safe is not open" });
+        return;
+      }
+      if (access !== "owner") {
+        setTxMsg({ kind: "err", text: "Access denied" });
+        return;
+      }
+
+      const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
+      if (!eth?.request) {
+        setTxMsg({ kind: "err", text: "Wallet not detected. Reconnect." });
+        return;
+      }
+
+      await ensureConnected(eth);
+
+      const ok = await ensureArcNetwork(eth);
+      if (!ok) {
+        setTxMsg({ kind: "err", text: `Switch to Arc Testnet (${ARC_CHAIN_ID}).` });
+        return;
+      }
+
+      const p2 = new ethers.BrowserProvider(eth);
+      const s2 = await p2.getSigner();
+      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
+
+      const tx = await safe.revokeConfirm(id);
+      await tx.wait();
+
+      setStoredTxHash(loadedSafe, id, tx.hash);
+      setTxHashes((m) => ({ ...m, [id]: tx.hash }));
+
+      setTxMsg({ kind: "ok", text: `TX ${id} revoked`, hash: tx.hash });
+      await loadSafe(loadedSafe);
+    } catch (e) {
+      setTxMsg({ kind: "err", text: errText(e) });
+    } finally {
+      setPending((x) => ({ ...x, txAction: null }));
+    }
+  }
+
+  async function cancelTx(id: number) {
+    setTxMsg(null);
+    setPending((x) => ({ ...x, txAction: { id, action: "cancel" } }));
+    try {
+      if (!wallet || !signer) {
+        setTxMsg({ kind: "err", text: "Connect wallet first" });
+        return;
+      }
+      if (!loadedSafe) {
+        setTxMsg({ kind: "err", text: "Safe is not open" });
+        return;
+      }
+      if (access !== "owner") {
+        setTxMsg({ kind: "err", text: "Access denied" });
+        return;
+      }
+
+      const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
+      if (!eth?.request) {
+        setTxMsg({ kind: "err", text: "Wallet not detected. Reconnect." });
+        return;
+      }
+
+      await ensureConnected(eth);
+
+      const ok = await ensureArcNetwork(eth);
+      if (!ok) {
+        setTxMsg({ kind: "err", text: `Switch to Arc Testnet (${ARC_CHAIN_ID}).` });
+        return;
+      }
+
+      const p2 = new ethers.BrowserProvider(eth);
+      const s2 = await p2.getSigner();
+      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
+
+      const tx = await safe.cancelTx(id);
+      await tx.wait();
+
+      setStoredTxHash(loadedSafe, id, tx.hash);
+      setTxHashes((m) => ({ ...m, [id]: tx.hash }));
+
+      setTxMsg({ kind: "ok", text: `TX ${id} canceled`, hash: tx.hash });
+      await loadSafe(loadedSafe);
+    } catch (e) {
+      setTxMsg({ kind: "err", text: errText(e) });
+    } finally {
+      setPending((x) => ({ ...x, txAction: null }));
+    }
+  }
+
   async function executeTx(id: number) {
     setTxMsg(null);
     setPending((x) => ({ ...x, txAction: { id, action: "execute" } }));
@@ -1595,7 +1716,6 @@ export default function Page() {
       setPending((x) => ({ ...x, txAction: null }));
     }
   }
-
   const isLoaded = !!loadedSafe;
   const wrongNet = wallet && chainId && !isArc(chainId);
 
@@ -2442,7 +2562,7 @@ export default function Page() {
                     <div style={{ marginTop: 20 }}>
                       <span style={{ fontSize: 24, fontWeight: 780 }}>{balance} {NATIVE_SYMBOL}</span>
                     </div>
-                    
+
                     <div style={{ display: "flex", marginTop: 16, alignItems: "flex-start", justifyContent: "space-between" }}>
                       <details>
                         <summary className="ownersBtn" style={{ cursor: "pointer", userSelect: "none", textTransform: "uppercase" }}>Owners</summary>
@@ -2488,7 +2608,7 @@ export default function Page() {
                           })}
                         </div>
                       </details>
-                      
+
                       <button
                         className="btn btnOk"
                         onClick={() => setTransferOpen(true)}
@@ -2523,7 +2643,11 @@ export default function Page() {
                           const txAction = pending.txAction;
                           const isConfirming = txAction?.id === t.id && txAction?.action === "confirm";
                           const isExecuting = txAction?.id === t.id && txAction?.action === "execute";
+                          const isRevoking = txAction?.id === t.id && txAction?.action === "revoke";
+                          const isCanceling = txAction?.id === t.id && txAction?.action === "cancel";
                           const disableRow = !!txAction;
+
+                          const isCanceled = !!txCanceled?.[t.id];
 
                           const h = txHashes?.[t.id] || "";
                           const u = h ? txUrl(h) : "";
@@ -2533,6 +2657,8 @@ export default function Page() {
 
                           const statusText = t.executed
                             ? null
+                            : isCanceled
+                            ? "Canceled"
                             : t.confirms >= THRESHOLD
                             ? "Ready to execute"
                             : `Waiting for confirmations ${Math.max(0, t.confirms)}/${THRESHOLD}`;
@@ -2541,11 +2667,14 @@ export default function Page() {
                           ) : null;
 
                           return (
-                            <div key={t.id} className="txItem">
+                            <div key={t.id} className={`txItem ${isCanceled ? "txCanceled" : ""}`}>
                               <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                                 <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
                                   <div style={{ fontWeight: 780, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
                                     TX {t.id}
+                                    {isCanceled ? (
+                                      <span className="chip chipCanceled" style={{ padding: "4px 10px", fontSize: 12 }}>Canceled</span>
+                                    ) : null}
                                     {statusIcon ? (
                                       <span style={{ display: "inline-flex", alignItems: "center" }}>{statusIcon}</span>
                                     ) : (
@@ -2554,11 +2683,11 @@ export default function Page() {
                                       </span>
                                     )}
                                   </div>
-                                  
+
                                   <div style={{ fontSize: 14 }}>
                                     {ethers.formatUnits(t.amount, NATIVE_DECIMALS)} {NATIVE_SYMBOL} → {short(t.to)}
                                   </div>
-                                  
+
                                   <div className="muted" style={{ fontSize: 13, textTransform: "uppercase" }}>
                                     Signatures: {t.confirms}/{THRESHOLD}
                                   </div>
@@ -2578,9 +2707,9 @@ export default function Page() {
                                             padding: "6px 10px",
                                             fontSize: 12,
                                             opacity: ok ? 1 : 0.7,
-                                            ...(me && ok ? { 
-                                              background: "rgba(80,220,170,0.1)", 
-                                              borderColor: "rgba(80,220,170,0.5)",
+                                            ...(me && ok ? {
+                                               background: "rgba(80,220,170,0.1)",
+                                               borderColor: "rgba(80,220,170,0.5)",
                                               fontWeight: 700
                                             } : {})
                                           }}
@@ -2594,17 +2723,29 @@ export default function Page() {
                                 </div>
 
                                 <div className="row" style={{ gap: 8, flex: "0 0 auto" }}>
-                                  {!t.executed ? (
+                                  {!t.executed && !isCanceled ? (
                                     <>
-                                      <button
-                                        className="btn"
-                                        onClick={() => confirmTx(t.id)}
-                                        disabled={disableRow || meConfirmed}
-                                        type="button"
-                                        title={meConfirmed ? "Already confirmed by this wallet" : "Confirm"}
-                                      >
-                                        {meConfirmed ? "Confirmed" : isConfirming ? "Confirming…" : "Confirm"}
-                                      </button>
+                                      {meConfirmed ? (
+                                        <button
+                                          className="btn btnDanger"
+                                          onClick={() => revokeConfirm(t.id)}
+                                          disabled={disableRow}
+                                          type="button"
+                                          title="Revoke your confirmation"
+                                        >
+                                          {isRevoking ? "Revoking…" : "Revoke"}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          className="btn"
+                                          onClick={() => confirmTx(t.id)}
+                                          disabled={disableRow}
+                                          type="button"
+                                          title="Confirm"
+                                        >
+                                          {isConfirming ? "Confirming…" : "Confirm"}
+                                        </button>
+                                      )}
                                       {t.confirms >= THRESHOLD ? (
                                         <button
                                           className="btn btnOk"
@@ -2615,6 +2756,15 @@ export default function Page() {
                                           {isExecuting ? "Executing…" : "Execute"}
                                         </button>
                                       ) : null}
+                                      <button
+                                        className="btn btnCancel"
+                                        onClick={() => cancelTx(t.id)}
+                                        disabled={disableRow}
+                                        type="button"
+                                        title="Cancel this transaction"
+                                      >
+                                        {isCanceling ? "Canceling…" : "Cancel"}
+                                      </button>
                                     </>
                                   ) : null}
                                 </div>

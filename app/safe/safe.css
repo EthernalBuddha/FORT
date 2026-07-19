@@ -104,7 +104,7 @@
   transition: text-shadow 0.2s ease, color 0.2s ease;
 }
 
-.safeScope button:hover:not(.menuItem){ 
+.safeScope button:hover:not(.menuItem){
   text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
   color: #fff;
 }
@@ -241,7 +241,7 @@
 }
 
 .safeScope .btnOk:hover,
-.safeModal .btnOk:hover{ 
+.safeModal .btnOk:hover{
   filter: brightness(1.1);
   border-color: rgba(80,220,170,0.7) !important;
 }
@@ -405,4 +405,35 @@
 .safeScope .explorerLink:hover{
   opacity: 1;
   text-shadow: 0 0 8px rgba(255,255,255,0.54), 0 0 16px rgba(150,200,255,0.4), 0 0 24px rgba(100,180,255,0.27);
+}
+
+/* --- Revoke / Cancel / Canceled --- */
+.safeScope .chipCanceled{
+  border-color: rgba(255,190,190,0.22);
+  background: rgba(70,20,26,0.20);
+  color: rgba(255,190,190,0.95);
+}
+
+.safeScope .btnDanger, .safeModal .btnDanger{
+  background: rgba(255,190,120,0.10) !important;
+  border-color: rgba(255,190,120,0.45) !important;
+  color: rgba(255,255,255,0.9) !important;
+}
+.safeScope .btnDanger:hover, .safeModal .btnDanger:hover{
+  filter: brightness(1.1);
+  border-color: rgba(255,190,120,0.7) !important;
+}
+
+.safeScope .btnCancel, .safeModal .btnCancel{
+  background: rgba(255,95,115,0.10) !important;
+  border-color: rgba(255,95,115,0.45) !important;
+  color: rgba(255,255,255,0.9) !important;
+}
+.safeScope .btnCancel:hover, .safeModal .btnCancel:hover{
+  filter: brightness(1.1);
+  border-color: rgba(255,95,115,0.7) !important;
+}
+
+.safeScope .txCanceled{
+  opacity: 0.6;
 }
