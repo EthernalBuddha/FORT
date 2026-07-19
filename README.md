@@ -26,7 +26,17 @@ https://fortsafe.vercel.app/
 ## Data persistence
 The dApp stores Safe metadata, tx hashes, and Sync scan progress in browser `localStorage` (per wallet).
 
+## Environment variables
+All variables are optional and have sensible defaults. See `.env.example`.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_ARC_EXPLORER_TX` | `https://testnet.arcscan.app/tx/` | Explorer transaction URL prefix used to build tx links. |
+| `NEXT_PUBLIC_FACTORY_FROM_BLOCK` | `0` | Block to start `SaveCreated` log scanning from (set to the factory deployment block to speed up Sync). |
+| `NEXT_PUBLIC_FACTORY_LOG_CHUNK` | `35000` | Chunk size for `provider.getLogs` when scanning logs. |
+
 ## Run locally
 ```bash
 npm i
 npm run dev
+```

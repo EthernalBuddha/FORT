@@ -1,7 +1,5 @@
 :root{
   color-scheme: dark;
-  --font-inter: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  --font-brand: var(--font-inter);
 }
 
 *{ box-sizing: border-box; }
@@ -10,7 +8,7 @@ html, body{ margin: 0; padding: 0; }
 body{
   background: #000;
   color: #fff;
-  font-family: var(--font-inter);
+  font-family: var(--font-inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif);
 }
 
 a{ color: inherit; text-decoration: none; }
