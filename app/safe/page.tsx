@@ -1140,9 +1140,11 @@ export default function Page() {
       let ownersArr: string[] = [];
       try {
         const from = ethers.getAddress(activeWallet);
-        const a0 = await reader.owners(0, { from });
-        const a1 = await reader.owners(1, { from });
-        const a2 = await reader.owners(2, { from });
+        const [a0, a1, a2] = await Promise.all([
+          reader.owners(0, { from }),
+          reader.owners(1, { from }),
+          reader.owners(2, { from }),
+        ]);
         ownersArr = [a0, a1, a2];
       } catch {
         setAccess("denied");
@@ -1153,7 +1155,7 @@ export default function Page() {
         setTxConfirmedByOwner({});
         setTxCanceled({});
         setBalance("0");
-        setSafeErr("Access denied. You are not an owner of this safe.");
+        setSafeErr(`Connected wallet ${short(activeWallet)} is not an owner of this safe. Switch to one of the 3 owner wallets to access it.`);
         setLoadingSafe(false);
         return;
       }
@@ -1173,7 +1175,7 @@ export default function Page() {
         setTxConfirmedByOwner({});
         setTxCanceled({});
         setBalance("0");
-        setSafeErr("Access denied. You are not an owner of this safe.");
+        setSafeErr(`Connected wallet ${short(activeWallet)} is not an owner of this safe. Switch to one of the 3 owner wallets to access it.`);
         setLoadingSafe(false);
         return;
       }
@@ -1197,18 +1199,30 @@ export default function Page() {
       const items: { id: number; to: string; amount: bigint; executed: boolean; confirms: number }[] = [];
 
       const from = ethers.getAddress(activeWallet);
-      for (let i = 0; i < 1000; i++) {
-        try {
-          const t = await reader.txs(i, { from });
+      const TX_BATCH = 10;
+      let stopProbing = false;
+      for (let base = 0; base < 1000 && !stopProbing; base += TX_BATCH) {
+        const batchIdxs = Array.from({ length: TX_BATCH }, (_, k) => base + k);
+        const batchResults = await Promise.all(
+          batchIdxs.map((i) =>
+            reader.txs(i, { from }).then(
+              (t: any) => ({ ok: true as const, i, t }),
+              () => ({ ok: false as const, i, t: null as any })
+            )
+          )
+        );
+        for (const r of batchResults) {
+          if (!r.ok) {
+            stopProbing = true;
+            break;
+          }
           items.push({
-            id: i,
-            to: t.to,
-            amount: t.amount,
-            executed: t.executed,
-            confirms: Number(t.confirms),
+            id: r.i,
+            to: r.t.to,
+            amount: r.t.amount,
+            executed: r.t.executed,
+            confirms: Number(r.t.confirms),
           });
-        } catch {
-          break;
         }
       }
       setTxs(items);
@@ -1221,29 +1235,20 @@ export default function Page() {
       setTxHashes(map);
 
       const sigMap: Record<number, boolean[]> = {};
-      for (const it of items) {
-        const sigs: boolean[] = [];
-        for (let j = 0; j < 3; j++) {
-          try {
-            const ok = await reader.confirmed(it.id, ownersArr[j], { from });
-            sigs.push(!!ok);
-          } catch {
-            sigs.push(false);
-          }
-        }
-        sigMap[it.id] = sigs;
-      }
-      setTxConfirmedByOwner(sigMap);
-
       const cancelMap: Record<number, boolean> = {};
-      for (const it of items) {
-        try {
-          const c = await reader.canceled(it.id, { from });
-          cancelMap[it.id] = !!c;
-        } catch {
-          cancelMap[it.id] = false;
-        }
-      }
+      await Promise.all(
+        items.map(async (it) => {
+          const [s0, s1, s2, c] = await Promise.all([
+            reader.confirmed(it.id, ownersArr[0], { from }).then((x: any) => !!x, () => false),
+            reader.confirmed(it.id, ownersArr[1], { from }).then((x: any) => !!x, () => false),
+            reader.confirmed(it.id, ownersArr[2], { from }).then((x: any) => !!x, () => false),
+            reader.canceled(it.id, { from }).then((x: any) => !!x, () => false),
+          ]);
+          sigMap[it.id] = [s0, s1, s2];
+          cancelMap[it.id] = c;
+        })
+      );
+      setTxConfirmedByOwner(sigMap);
       setTxCanceled(cancelMap);
 
       addSafeForWallet(activeWallet, a);
