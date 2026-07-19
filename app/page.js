@@ -33,6 +33,12 @@ export default function Page() {
             <h1 className="h1">A fortress for your assets</h1>
             <p className="sub">Multisig wallet for secure onchain payments</p>
 
+            <div className="heroChips">
+              <span className="heroChip">Non-custodial</span>
+              <span className="heroChip">2-of-3 multisig</span>
+              <span className="heroChip">Built on Arc</span>
+            </div>
+
             <div className="ctaRow">
               <a className="btnPrimary" href="/safe" target="_blank" rel="noopener noreferrer">
                 Launch App
@@ -121,7 +127,7 @@ export default function Page() {
 
         <footer className="footer">
           <div className="footerBar">
-            <div className="footerText">© 2025–2026 FORT · Built on Arc Network · All rights reserved.</div>
+            <div className="footerText">© 2025–2026 FORT · Built on Arc · All rights reserved.</div>
 
             <div className="footerIcons">
               <a
@@ -342,7 +348,29 @@ export default function Page() {
             0 18px 60px rgba(0,0,0,0.52);
         }
 
-        .ctaRow{ margin-top:66px; display:flex; justify-content:center; }
+        .heroChips{
+          margin:22px auto 0;
+          display:flex;
+          flex-wrap:wrap;
+          justify-content:center;
+          gap:10px;
+        }
+        .heroChip{
+          display:inline-flex;
+          align-items:center;
+          height:30px;
+          padding:0 14px;
+          border-radius:999px;
+          border:1px solid rgba(255,255,255,0.12);
+          background:rgba(255,255,255,0.05);
+          color:rgba(255,255,255,0.80);
+          font-size:12px;
+          font-weight:650;
+          letter-spacing:.02em;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        .ctaRow{ margin-top:30px; display:flex; justify-content:center; }
 
         .btnPrimary{
           text-decoration:none;
@@ -549,7 +577,7 @@ export default function Page() {
         @media (max-width:980px){
           .h1{ font-size:40px; }
           .navLink{ display:none; }
-          .ctaRow{ margin-top:54px; }
+          .ctaRow{ margin-top:26px; }
           .hero{ padding-bottom:72px; }
           .topBarInner{ padding:16px 18px; }
           .howGrid{ grid-template-columns:1fr; }
