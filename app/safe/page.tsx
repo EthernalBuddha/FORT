@@ -51,6 +51,8 @@ const SAFE_ABI = [
   "function revokeConfirm(uint256 id)",
   "function cancelTx(uint256 id)",
   "function executeTx(uint256 id)",
+  "event TxCreated(uint256 indexed id, address indexed proposer, address indexed to, uint256 amount)",
+  "event TxExecuted(uint256 indexed id, address indexed executor, address indexed to, uint256 amount)",
 ];
 
 const NAME_PREFIX = "arcsafe:safeName:";
@@ -307,6 +309,48 @@ function setSafeCache(safe: string, wallet: string, data: any) {
     if (!s || !w) return;
     localStorage.setItem(SAFE_CACHE_PREFIX + s.toLowerCase(), JSON.stringify({ wallet: w, ...data }));
   } catch {}
+}
+
+async function fetchTxHashesFromLogs(
+  reader: any,
+  p: any,
+  ids: number[]
+): Promise<{ created: Record<number, string>; executed: Record<number, string> }> {
+  const created: Record<number, string> = {};
+  const executed: Record<number, string> = {};
+  try {
+    const latest = await p.getBlockNumber();
+    const span = Number.isFinite(LOG_CHUNK) && LOG_CHUNK > 0 ? LOG_CHUNK : 35000;
+    const MAX_CHUNKS = 8;
+    let scanned = 0;
+    let to = latest;
+    while (to >= 0 && scanned < MAX_CHUNKS) {
+      const fromBlock = Math.max(0, to - span + 1);
+      try {
+        const [cLogs, eLogs] = await Promise.all([
+          reader.queryFilter(reader.filters.TxCreated(), fromBlock, to),
+          reader.queryFilter(reader.filters.TxExecuted(), fromBlock, to),
+        ]);
+        for (const lg of cLogs) {
+          const id = Number(lg?.args?.id);
+          if (Number.isFinite(id) && lg?.transactionHash && created[id] === undefined) {
+            created[id] = lg.transactionHash;
+          }
+        }
+        for (const lg of eLogs) {
+          const id = Number(lg?.args?.id);
+          if (Number.isFinite(id) && lg?.transactionHash && executed[id] === undefined) {
+            executed[id] = lg.transactionHash;
+          }
+        }
+      } catch {}
+      scanned++;
+      if (ids.length && ids.every((id) => created[id] !== undefined)) break;
+      if (fromBlock === 0) break;
+      to = fromBlock - 1;
+    }
+  } catch {}
+  return { created, executed };
 }
 
 function setSafeParamInUrl(a: string, name: string) {
@@ -1311,10 +1355,29 @@ export default function Page() {
       setTxs(items);
 
       const map: Record<number, string> = {};
+      const missingHashes: number[] = [];
       for (const it of items) {
         const h = getStoredTxHash(a, it.id);
         if (h) map[it.id] = h;
+        else missingHashes.push(it.id);
       }
+
+      if (missingHashes.length && !silent) {
+        const { created, executed } = await fetchTxHashesFromLogs(
+          reader,
+          p,
+          items.map((it) => it.id)
+        );
+        for (const it of items) {
+          if (map[it.id]) continue;
+          const h = it.executed ? executed[it.id] || created[it.id] : created[it.id];
+          if (h) {
+            map[it.id] = h;
+            setStoredTxHash(a, it.id, h);
+          }
+        }
+      }
+
       setTxHashes(map);
 
       const sigMap: Record<number, boolean[]> = {};
