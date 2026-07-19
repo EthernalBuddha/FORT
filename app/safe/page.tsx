@@ -2801,7 +2801,7 @@ export default function Page() {
           style={{ maxWidth: 1320, width: "100%", padding: "0 24px", margin: "0 auto", boxSizing: "border-box" }}
         >
           <div className="footerBar">
-            <div className="footerText">© 2026 FORT · Built on Arc™ · All rights reserved.</div>
+            <div className="footerText">© 2026 FORT · Built on Arc · All rights reserved.</div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <a className="footerX" href="https://x.com/Gioddddd" target="_blank" rel="noopener noreferrer" aria-label="X" title="X">
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
