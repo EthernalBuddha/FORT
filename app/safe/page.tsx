@@ -41,7 +41,10 @@ const FACTORY_ABI = [
 const SAFE_ABI = [
   "function owners(uint256) view returns (address)",
   "function txs(uint256) view returns (address to, uint256 amount, bool executed, uint8 confirms)",
+  "function txCount() view returns (uint256)",
+  "function getTx(uint256 id) view returns (address to, uint256 amount, bool executed, uint8 confirms, bool isCanceled)",
   "function confirmed(uint256, address) view returns (bool)",
+  "function isConfirmed(uint256 id, address owner) view returns (bool)",
   "function canceled(uint256) view returns (bool)",
   "function createTx(address to, uint256 amount) returns (uint256)",
   "function confirmTx(uint256 id)",
@@ -56,6 +59,7 @@ const TXHASH_PREFIX = "arcsafe:txHash:";
 const SCAN_BLOCK_PREFIX = "arcsafe:scanBlock:";
 const HIDDEN_SAFES_PREFIX = "arcsafe:hiddenSafes:";
 const CONNECTED_WALLET_KEY = "arcsafe:connectedWallet";
+const SAFE_CACHE_PREFIX = "arcsafe:safeCache:";
 
 const FACTORY_FROM_BLOCK = Number(process.env.NEXT_PUBLIC_FACTORY_FROM_BLOCK || 0);
 const LOG_CHUNK = Number(process.env.NEXT_PUBLIC_FACTORY_LOG_CHUNK || 35000);
@@ -281,6 +285,27 @@ function setStoredTxHash(safe: string, id: number, hash: string) {
     const h = (hash || "").trim();
     if (!s || !Number.isFinite(i) || i < 0 || !h) return;
     localStorage.setItem(`${TXHASH_PREFIX}${s.toLowerCase()}:${i}`, h);
+  } catch {}
+}
+
+function getSafeCache(safe: string): any {
+  try {
+    const s = normAddr(safe);
+    if (!s) return null;
+    const raw = localStorage.getItem(SAFE_CACHE_PREFIX + s.toLowerCase());
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setSafeCache(safe: string, wallet: string, data: any) {
+  try {
+    const s = normAddr(safe);
+    const w = (wallet || "").toLowerCase();
+    if (!s || !w) return;
+    localStorage.setItem(SAFE_CACHE_PREFIX + s.toLowerCase(), JSON.stringify({ wallet: w, ...data }));
   } catch {}
 }
 
@@ -977,6 +1002,23 @@ export default function Page() {
   }, [wallet, loadedSafe]);
 
   useEffect(() => {
+    if (!loadedSafe || access !== "owner") return;
+    const refresh = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      loadSafe(loadedSafe, undefined, walletRef.current, true);
+    };
+    const timer = setInterval(refresh, 15000);
+    const onVis = () => {
+      if (typeof document !== "undefined" && !document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [loadedSafe, access]);
+
+  useEffect(() => {
     const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
     if (!eth?.on) return;
 
@@ -1059,9 +1101,9 @@ export default function Page() {
       } catch {}
     };
   }, [walletProviderKey, loadedSafe]);
-  async function loadSafe(addr: string, override?: { provider?: any; signer?: any }, walletAddr?: string) {
+  async function loadSafe(addr: string, override?: { provider?: any; signer?: any }, walletAddr?: string, silent?: boolean) {
     setSafeErr("");
-    setLoadingSafe(true);
+    if (!silent) setLoadingSafe(true);
 
     try {
       const a = normAddr(addr);
@@ -1133,7 +1175,41 @@ export default function Page() {
         return;
       }
 
-      setAccess("checking");
+      if (!silent) setAccess("checking");
+
+      const cached = getSafeCache(a);
+      if (
+        cached &&
+        cached.wallet === activeWallet.toLowerCase() &&
+        Array.isArray(cached.owners)
+      ) {
+        try {
+          setOwners(cached.owners);
+          const cIdx = cached.owners.findIndex(
+            (o: string) => (o || "").toLowerCase() === activeWallet.toLowerCase()
+          );
+          if (cIdx >= 0) {
+            setAccess("owner");
+            setOwnerIndex(cIdx);
+          }
+          if (typeof cached.balance === "string") setBalance(cached.balance);
+          if (Array.isArray(cached.txs)) {
+            setTxs(
+              cached.txs.map((t: any) => ({
+                id: t.id,
+                to: t.to,
+                amount: BigInt(t.amount),
+                executed: t.executed,
+                confirms: t.confirms,
+              }))
+            );
+          }
+          if (cached.sigs) setTxConfirmedByOwner(cached.sigs);
+          if (cached.cancel) setTxCanceled(cached.cancel);
+          if (cached.name) setSafeNames((prev) => ({ ...prev, [a.toLowerCase()]: cached.name }));
+          setLoadingSafe(false);
+        } catch {}
+      }
 
       const reader: any = new ethers.Contract(a, SAFE_ABI, p);
 
@@ -1197,25 +1273,31 @@ export default function Page() {
       setBalance(ethers.formatUnits(bal, NATIVE_DECIMALS));
 
       const items: { id: number; to: string; amount: bigint; executed: boolean; confirms: number }[] = [];
+      const cancelMap: Record<number, boolean> = {};
 
       const from = ethers.getAddress(activeWallet);
-      const TX_BATCH = 10;
-      let stopProbing = false;
-      for (let base = 0; base < 1000 && !stopProbing; base += TX_BATCH) {
-        const batchIdxs = Array.from({ length: TX_BATCH }, (_, k) => base + k);
-        const batchResults = await Promise.all(
-          batchIdxs.map((i) =>
-            reader.txs(i, { from }).then(
+
+      let count = 0;
+      try {
+        count = Number(await reader.txCount({ from }));
+      } catch {
+        count = 0;
+      }
+      if (!Number.isFinite(count) || count < 0) count = 0;
+
+      const TX_CHUNK = 20;
+      for (let base = 0; base < count; base += TX_CHUNK) {
+        const ids = Array.from({ length: Math.min(TX_CHUNK, count - base) }, (_, k) => base + k);
+        const part = await Promise.all(
+          ids.map((i) =>
+            reader.getTx(i, { from }).then(
               (t: any) => ({ ok: true as const, i, t }),
               () => ({ ok: false as const, i, t: null as any })
             )
           )
         );
-        for (const r of batchResults) {
-          if (!r.ok) {
-            stopProbing = true;
-            break;
-          }
+        for (const r of part) {
+          if (!r.ok) continue;
           items.push({
             id: r.i,
             to: r.t.to,
@@ -1223,6 +1305,7 @@ export default function Page() {
             executed: r.t.executed,
             confirms: Number(r.t.confirms),
           });
+          cancelMap[r.i] = !!r.t.isCanceled;
         }
       }
       setTxs(items);
@@ -1235,21 +1318,33 @@ export default function Page() {
       setTxHashes(map);
 
       const sigMap: Record<number, boolean[]> = {};
-      const cancelMap: Record<number, boolean> = {};
       await Promise.all(
         items.map(async (it) => {
-          const [s0, s1, s2, c] = await Promise.all([
+          const [s0, s1, s2] = await Promise.all([
             reader.confirmed(it.id, ownersArr[0], { from }).then((x: any) => !!x, () => false),
             reader.confirmed(it.id, ownersArr[1], { from }).then((x: any) => !!x, () => false),
             reader.confirmed(it.id, ownersArr[2], { from }).then((x: any) => !!x, () => false),
-            reader.canceled(it.id, { from }).then((x: any) => !!x, () => false),
           ]);
           sigMap[it.id] = [s0, s1, s2];
-          cancelMap[it.id] = c;
         })
       );
       setTxConfirmedByOwner(sigMap);
       setTxCanceled(cancelMap);
+
+      setSafeCache(a, activeWallet, {
+        owners: ownersArr,
+        balance: ethers.formatUnits(bal, NATIVE_DECIMALS),
+        txs: items.map((t) => ({
+          id: t.id,
+          to: t.to,
+          amount: t.amount.toString(),
+          executed: t.executed,
+          confirms: t.confirms,
+        })),
+        sigs: sigMap,
+        cancel: cancelMap,
+        name: (safeNames[a.toLowerCase()] || "").trim(),
+      });
 
       addSafeForWallet(activeWallet, a);
       setCreatedSafes(getSafesForWallet(activeWallet));
@@ -1522,9 +1617,12 @@ export default function Page() {
     }
   }
 
-  async function confirmTx(id: number) {
+  async function runTxAction(
+    id: number,
+    action: "confirm" | "revoke" | "cancel" | "execute"
+  ) {
     setTxMsg(null);
-    setPending((x) => ({ ...x, txAction: { id, action: "confirm" } }));
+    setPending((x) => ({ ...x, txAction: { id, action } }));
     try {
       if (!wallet || !signer) {
         setTxMsg({ kind: "err", text: "Connect wallet first" });
@@ -1557,13 +1655,44 @@ export default function Page() {
       const s2 = await p2.getSigner();
       const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
 
-      const tx = await safe.confirmTx(id);
+      if (action === "execute") {
+        const t = txs.find((x) => x.id === id);
+        if (t) {
+          try {
+            const bal = await p2.getBalance(loadedSafe);
+            if (bal < t.amount) {
+              setTxMsg({
+                kind: "err",
+                text: `Insufficient safe balance. Need ${ethers.formatUnits(t.amount, NATIVE_DECIMALS)} ${NATIVE_SYMBOL}, available ${ethers.formatUnits(bal, NATIVE_DECIMALS)} ${NATIVE_SYMBOL}.`,
+              });
+              return;
+            }
+          } catch {}
+        }
+      }
+
+      const tx =
+        action === "confirm"
+          ? await safe.confirmTx(id)
+          : action === "revoke"
+          ? await safe.revokeConfirm(id)
+          : action === "cancel"
+          ? await safe.cancelTx(id)
+          : await safe.executeTx(id);
       await tx.wait();
 
       setStoredTxHash(loadedSafe, id, tx.hash);
       setTxHashes((m) => ({ ...m, [id]: tx.hash }));
 
-      setTxMsg({ kind: "ok", text: `TX ${id} confirmed`, hash: tx.hash });
+      const label =
+        action === "confirm"
+          ? "confirmed"
+          : action === "revoke"
+          ? "revoked"
+          : action === "cancel"
+          ? "canceled"
+          : "executed";
+      setTxMsg({ kind: "ok", text: `TX ${id} ${label}`, hash: tx.hash });
       await loadSafe(loadedSafe);
     } catch (e) {
       setTxMsg({ kind: "err", text: errText(e) });
@@ -1572,155 +1701,11 @@ export default function Page() {
     }
   }
 
-  async function revokeConfirm(id: number) {
-    setTxMsg(null);
-    setPending((x) => ({ ...x, txAction: { id, action: "revoke" } }));
-    try {
-      if (!wallet || !signer) {
-        setTxMsg({ kind: "err", text: "Connect wallet first" });
-        return;
-      }
-      if (!loadedSafe) {
-        setTxMsg({ kind: "err", text: "Safe is not open" });
-        return;
-      }
-      if (access !== "owner") {
-        setTxMsg({ kind: "err", text: "Access denied" });
-        return;
-      }
+  const confirmTx = (id: number) => runTxAction(id, "confirm");
+  const revokeConfirm = (id: number) => runTxAction(id, "revoke");
+  const cancelTx = (id: number) => runTxAction(id, "cancel");
+  const executeTx = (id: number) => runTxAction(id, "execute");
 
-      const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
-      if (!eth?.request) {
-        setTxMsg({ kind: "err", text: "Wallet not detected. Reconnect." });
-        return;
-      }
-
-      await ensureConnected(eth);
-
-      const ok = await ensureArcNetwork(eth);
-      if (!ok) {
-        setTxMsg({ kind: "err", text: `Switch to Arc Testnet (${ARC_CHAIN_ID}).` });
-        return;
-      }
-
-      const p2 = new ethers.BrowserProvider(eth);
-      const s2 = await p2.getSigner();
-      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
-
-      const tx = await safe.revokeConfirm(id);
-      await tx.wait();
-
-      setStoredTxHash(loadedSafe, id, tx.hash);
-      setTxHashes((m) => ({ ...m, [id]: tx.hash }));
-
-      setTxMsg({ kind: "ok", text: `TX ${id} revoked`, hash: tx.hash });
-      await loadSafe(loadedSafe);
-    } catch (e) {
-      setTxMsg({ kind: "err", text: errText(e) });
-    } finally {
-      setPending((x) => ({ ...x, txAction: null }));
-    }
-  }
-
-  async function cancelTx(id: number) {
-    setTxMsg(null);
-    setPending((x) => ({ ...x, txAction: { id, action: "cancel" } }));
-    try {
-      if (!wallet || !signer) {
-        setTxMsg({ kind: "err", text: "Connect wallet first" });
-        return;
-      }
-      if (!loadedSafe) {
-        setTxMsg({ kind: "err", text: "Safe is not open" });
-        return;
-      }
-      if (access !== "owner") {
-        setTxMsg({ kind: "err", text: "Access denied" });
-        return;
-      }
-
-      const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
-      if (!eth?.request) {
-        setTxMsg({ kind: "err", text: "Wallet not detected. Reconnect." });
-        return;
-      }
-
-      await ensureConnected(eth);
-
-      const ok = await ensureArcNetwork(eth);
-      if (!ok) {
-        setTxMsg({ kind: "err", text: `Switch to Arc Testnet (${ARC_CHAIN_ID}).` });
-        return;
-      }
-
-      const p2 = new ethers.BrowserProvider(eth);
-      const s2 = await p2.getSigner();
-      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
-
-      const tx = await safe.cancelTx(id);
-      await tx.wait();
-
-      setStoredTxHash(loadedSafe, id, tx.hash);
-      setTxHashes((m) => ({ ...m, [id]: tx.hash }));
-
-      setTxMsg({ kind: "ok", text: `TX ${id} canceled`, hash: tx.hash });
-      await loadSafe(loadedSafe);
-    } catch (e) {
-      setTxMsg({ kind: "err", text: errText(e) });
-    } finally {
-      setPending((x) => ({ ...x, txAction: null }));
-    }
-  }
-
-  async function executeTx(id: number) {
-    setTxMsg(null);
-    setPending((x) => ({ ...x, txAction: { id, action: "execute" } }));
-    try {
-      if (!wallet || !signer) {
-        setTxMsg({ kind: "err", text: "Connect wallet first" });
-        return;
-      }
-      if (!loadedSafe) {
-        setTxMsg({ kind: "err", text: "Safe is not open" });
-        return;
-      }
-      if (access !== "owner") {
-        setTxMsg({ kind: "err", text: "Access denied" });
-        return;
-      }
-
-      const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
-      if (!eth?.request) {
-        setTxMsg({ kind: "err", text: "Wallet not detected. Reconnect." });
-        return;
-      }
-
-      await ensureConnected(eth);
-
-      const ok = await ensureArcNetwork(eth);
-      if (!ok) {
-        setTxMsg({ kind: "err", text: `Switch to Arc Testnet (${ARC_CHAIN_ID}).` });
-        return;
-      }
-
-      const p2 = new ethers.BrowserProvider(eth);
-      const s2 = await p2.getSigner();
-      const safe: any = new ethers.Contract(loadedSafe, SAFE_ABI, s2);
-
-      const tx = await safe.executeTx(id);
-      await tx.wait();
-
-      setStoredTxHash(loadedSafe, id, tx.hash);
-      setTxHashes((m) => ({ ...m, [id]: tx.hash }));
-
-      setTxMsg({ kind: "ok", text: `TX ${id} executed`, hash: tx.hash });
-      await loadSafe(loadedSafe);
-    } catch (e) {
-      setTxMsg({ kind: "err", text: errText(e) });
-    } finally {
-      setPending((x) => ({ ...x, txAction: null }));
-    }
-  }
   const isLoaded = !!loadedSafe;
   const wrongNet = wallet && chainId && !isArc(chainId);
 
