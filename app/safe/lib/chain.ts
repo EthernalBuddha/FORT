@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 
-const FACTORY_ADDRESS_RAW = "0xfbd26640b1F33CA44a7BA1449555F9E46FE82cfb";
+const FACTORY_ADDRESS_RAW = "0x8e9B2D27Ad56C31b05A8271C7e4A5353D6448008";
 
 export const FACTORY_ADDRESS = ethers.getAddress(FACTORY_ADDRESS_RAW);
 export const ARC_CHAIN_ID = 5042002;

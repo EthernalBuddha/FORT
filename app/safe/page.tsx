@@ -44,6 +44,7 @@ import {
   fetchSafeSnapshot,
   isMissingContractError,
   resolveSafeOwners,
+  type SafeTx,
 } from "./lib/safeData";
 import { useWallet } from "./hooks/useWallet";
 import { useTxActions, type TxActionName } from "./hooks/useTxActions";
@@ -90,16 +91,7 @@ export default function Page() {
   const [balance, setBalance] = useState("0");
   // Free balance from the contract: what is not reserved by created transactions.
   const [available, setAvailable] = useState("");
-  const [txs, setTxs] = useState<
-    {
-      id: number;
-      to: string;
-      amount: bigint;
-      executed: boolean;
-      confirms: number;
-      cancelVotes?: number;
-    }[]
-  >([]);
+  const [txs, setTxs] = useState<SafeTx[]>([]);
   const [txHashes, setTxHashes] = useState<Record<number, string>>({});
   const [txConfirmedByOwner, setTxConfirmedByOwner] = useState<
     Record<number, boolean[]>
