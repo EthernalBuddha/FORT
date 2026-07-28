@@ -41,3 +41,16 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .idea/
+
+# editors
+.vscode/
+
+# refactor leftovers: manual backups of source files
+*.bak
+*.bak[0-9]
+*.orig
+*.rej
+*.pre-*.tsx
+*.before-*.tsx
+*.pre-*.ts
+*.before-*.ts

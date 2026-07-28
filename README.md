@@ -7,33 +7,78 @@ https://fortsafe.vercel.app/
 ## Features
 - Wallet connect: EIP-6963 + fallback (`WalletConnectModal`), normalized EIP-1193 (`provider.request`)
 - Auto add/switch to Arc Testnet
-- Safe flow: 3 owners, threshold 2
-- Create / confirm / execute transfers
-- Access control: only Safe owners can view owners, balances, and transactions (otherwise: Access denied)
-- Sync: scans `SaveCreated` via chunked `provider.getLogs` and stores the last scanned block per wallet
+- Safe flow: 3 owners, threshold 2 of 3
+- Create / confirm / revoke / execute transfers
+- Cancel a pending transfer: also 2 of 3, a single vote only records intent and can be revoked
+- On-chain Safe names, stored in the factory
+- Sync: reads the caller's Safes from the factory via `getSafesForOwner`
+- Reads are served by the app's own RPC proxy (`/api/rpc`), the wallet is used only for signing and network detection
+
+## What "access control" means here
+This is a UI-level restriction, not a privacy guarantee.
+
+The UI shows owners, balances and transactions only to an address that is one of the
+Safe's 3 owners; anyone else gets "Access denied". The contract, however, exposes all of
+that data through public view functions, and the chain itself is public: any observer can
+read the same state directly from a node or a block explorer.
+
+What is actually enforced on-chain is authorization to act, not to look:
+- only an owner can create, confirm, revoke, cancel or execute a transfer;
+- a transfer executes only with 2 of 3 confirmations;
+- a transfer is canceled only with 2 of 3 cancel votes.
+
+Treat the Safe's contents as public information.
+
+## Balances
+The contract reserves the amount of every created transfer in `pendingAmount`, so two
+numbers are not the same:
+- **balance** вЂ” everything the Safe holds;
+- **available balance** вЂ” what is left after the reservations of pending transfers.
+
+Creating a transfer is checked against the available balance, executing one against the
+full balance: the reservation is released as the transfer executes.
 
 ## Network
 - Name: Arc Testnet
 - ChainId: `5042002`
 - RPC: https://rpc.testnet.arc.network
-- Currency symbol: USDC
+- Currency symbol: USDC (also the gas token)
 - Explorer: https://testnet.arcscan.app
+- Faucet: https://faucet.circle.com
 
 ## Contracts
-- Factory: `0x264E2d5537B0073F35eD6A0Ed006Eb21022985c7`
-- Event: `SaveCreated`
+- Factory: `0xfbd26640b1F33CA44a7BA1449555F9E46FE82cfb` (deployed at block 54099247)
+- Events: `SaveCreated`, `TxCreated`, `TxConfirmed`, `TxExecuted`, `TxCanceled`, `TxCancelVoted`
+- Sources and tests: `fort-contracts` (Foundry)
+
+## Project layout
+```
+app/
+  api/rpc/route.ts        RPC proxy: all reads go through it
+  safe/
+    page.tsx              page state, safe loading, layout
+    components/           CreateSafeModal, TransferModal, RenameSafeModal,
+                          RemoveSafeModal, TxCard, SafeRow, ui
+    hooks/                useWallet (connection, network, events),
+                          useTxActions (every on-chain write)
+    lib/                  chain (addresses, ABIs, read provider),
+                          safeData (snapshot reads), storage (localStorage),
+                          txHashes, format
+components/               WalletMenu, WalletConnectModal
+```
 
 ## Data persistence
-The dApp stores Safe metadata, tx hashes, and Sync scan progress in browser `localStorage` (per wallet).
+The dApp stores Safe metadata, a snapshot of each Safe and transaction hashes in browser
+`localStorage`, per wallet. The snapshot lets a background refresh re-read only the last 20
+transactions instead of the whole list. Clearing site data loses nothing that matters: the
+Safes themselves are recovered from the factory by Sync.
 
 ## Environment variables
-All variables are optional and have sensible defaults. See `.env.example`.
+Optional, with a sensible default. See `.env.example`.
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `NEXT_PUBLIC_ARC_EXPLORER_TX` | `https://testnet.arcscan.app/tx/` | Explorer transaction URL prefix used to build tx links. |
-| `NEXT_PUBLIC_FACTORY_FROM_BLOCK` | `0` | Block to start `SaveCreated` log scanning from (set to the factory deployment block to speed up Sync). |
-| `NEXT_PUBLIC_FACTORY_LOG_CHUNK` | `35000` | Chunk size for `provider.getLogs` when scanning logs. |
 
 ## Run locally
 ```bash
