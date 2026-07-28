@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 import WalletMenu from "../../components/WalletMenu";
 import WalletConnectModal from "../../components/WalletConnectModal";
 
-const FACTORY_ADDRESS_RAW = "0x264e2d5537b0073f35ed6a0ed006eb21022985c7";
+const FACTORY_ADDRESS_RAW = "0xaa05Fe340913791d96890eb080452Ca522997755";
 const FACTORY_ADDRESS = ethers.getAddress(FACTORY_ADDRESS_RAW);
 const ARC_CHAIN_ID = 5042002;
 const ARC_CHAIN_ID_HEX = "0x4cef52";
@@ -58,13 +58,9 @@ const SAFE_ABI = [
 const NAME_PREFIX = "arcsafe:safeName:";
 const SAFES_BY_WALLET_PREFIX = "arcsafe:safesByWallet:";
 const TXHASH_PREFIX = "arcsafe:txHash:";
-const SCAN_BLOCK_PREFIX = "arcsafe:scanBlock:";
 const HIDDEN_SAFES_PREFIX = "arcsafe:hiddenSafes:";
 const CONNECTED_WALLET_KEY = "arcsafe:connectedWallet";
 const SAFE_CACHE_PREFIX = "arcsafe:safeCache:";
-
-const FACTORY_FROM_BLOCK = Number(process.env.NEXT_PUBLIC_FACTORY_FROM_BLOCK || 0);
-const LOG_CHUNK = Number(process.env.NEXT_PUBLIC_FACTORY_LOG_CHUNK || 35000);
 
 function normAddr(x: string) {
   const a = (x || "").trim().toLowerCase();
@@ -320,7 +316,7 @@ async function fetchTxHashesFromLogs(
   const executed: Record<number, string> = {};
   try {
     const latest = await p.getBlockNumber();
-    const span = Number.isFinite(LOG_CHUNK) && LOG_CHUNK > 0 ? LOG_CHUNK : 35000;
+    const span = 35000;
     const MAX_CHUNKS = 8;
     let scanned = 0;
     let to = latest;
@@ -737,27 +733,6 @@ export default function Page() {
     } finally {
       setPending((x) => ({ ...x, switchNet: false }));
     }
-  }
-
-  function getLastScanBlock(w: string) {
-    try {
-      const a = normAddr(w);
-      if (!a) return 0;
-      const raw = localStorage.getItem(SCAN_BLOCK_PREFIX + a.toLowerCase()) || "";
-      const v = Number(raw);
-      return Number.isFinite(v) && v >= 0 ? v : 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  function setLastScanBlock(w: string, b: number) {
-    try {
-      const a = normAddr(w);
-      const v = Number(b);
-      if (!a || !Number.isFinite(v) || v < 0) return;
-      localStorage.setItem(SCAN_BLOCK_PREFIX + a.toLowerCase(), String(v));
-    } catch {}
   }
 
   async function fetchSafeName(safeAddr: string): Promise<string> {
