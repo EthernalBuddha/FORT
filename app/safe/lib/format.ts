@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { decodeContractError } from "./errors";
 
 export function normAddr(x: string) {
   const a = (x || "").trim().toLowerCase();
@@ -19,6 +20,10 @@ export function errText(e: any) {
   if (e?.code === "TIMEOUT") return "Wallet request timed out. Open wallet and confirm.";
   if (e?.code === -32002) return "Wallet request already pending. Open wallet.";
   if (e?.code === 4001) return "Request rejected in wallet.";
+
+  // A decoded custom error from the contracts beats the raw 4-byte selector.
+  const decoded = decodeContractError(e);
+  if (decoded) return decoded;
   return (
     e?.shortMessage ||
     e?.reason ||

@@ -47,7 +47,7 @@ full balance: the reservation is released as the transfer executes.
 - Faucet: https://faucet.circle.com
 
 ## Contracts
-- Factory: `0x8e9B2D27Ad56C31b05A8271C7e4A5353D6448008` (deployed at block 54148508)
+- Factory: `0xc965e062f93F35507DF0F9E9a3973F04704215dA` (deployed at block 54284174)
 - Events: `SaveCreated`, `TxCreated`, `TxConfirmed`, `TxExecuted`, `TxCanceled`, `TxCancelVoted`
 - Sources and tests: `fort-contracts` (Foundry)
 
