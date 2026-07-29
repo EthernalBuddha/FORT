@@ -16,6 +16,8 @@ export const ARC_EXPLORER_BASE = "https://testnet.arcscan.app";
 export const NATIVE_SYMBOL = "USDC";
 export const NATIVE_DECIMALS = 18;
 
+// Mirrors Save.THRESHOLD (constant in the contract, cannot change without a
+// redeploy). Verify this value together with FACTORY_ADDRESS_RAW above.
 export const THRESHOLD = 2;
 
 export const EXPLORER_TX_PREFIX =
@@ -47,6 +49,7 @@ export const SAFE_ABI = [
   "function getTx(uint256 id) view returns (address to, uint256 amount, bool executed, uint8 confirms, bool isCanceled)",
   // Batched read: one request for all transactions, with confirmations and block numbers.
   "function getTxs(uint256 from, uint256 count) view returns (tuple(uint256 id, address to, uint256 amount, bool executed, uint8 confirms, bool isCanceled, address txProposer, uint8 cancelVoteCount, uint64 createdBlock, uint64 executedBlock, bool[3] confirmedBy, bytes data)[])",
+  "function getTxSummaries(uint256 from, uint256 count) view returns (tuple(uint256 id, address to, uint256 amount, bool executed, uint8 confirms, bool isCanceled, address txProposer, uint8 cancelVoteCount, uint64 createdBlock, uint64 executedBlock, bool[3] confirmedBy, uint256 dataLength)[])",
   "function getConfirms(uint256 id) view returns (bool[3])",
   "function confirmed(uint256, address) view returns (bool)",
   "function isConfirmed(uint256 id, address owner) view returns (bool)",

@@ -32,11 +32,18 @@ Treat the Safe's contents as public information.
 ## Balances
 The contract reserves the amount of every created transfer in `pendingAmount`, so two
 numbers are not the same:
-- **balance** вЂ” everything the Safe holds;
-- **available balance** вЂ” what is left after the reservations of pending transfers.
+- **balance** — everything the Safe holds;
+- **available balance** — what is left after the reservations of pending transfers.
 
 Creating a transfer is checked against the available balance, executing one against the
 full balance: the reservation is released as the transfer executes.
+
+A reservation can get stuck. If the recipient of a created transfer reverts on receive,
+`executeTx` keeps failing and the amount stays in `pendingAmount`, lowering
+`availableBalance()` for everyone. Cancelling releases it, but once the transfer has
+reached the confirmation threshold `cancelTx` reverts with `QuorumReached()`. The way out
+is `revokeConfirm`: any owner who confirmed revokes their confirmation, the count drops
+below the threshold, and the transfer can then be cancelled, which frees the reserve.
 
 ## Network
 - Name: Arc Testnet

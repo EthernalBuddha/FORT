@@ -31,7 +31,9 @@ const MESSAGES: Record<string, string> = {
   ZeroOwner: "Owner address cannot be zero.",
   OwnersMustDiffer: "All three owners must be different addresses.",
   BadId: "No transaction with this id.",
-  BadRecipient: "The safe cannot send to itself.",
+  // The contract reverts with the same selector for the zero address and for the
+  // safe itself, so this generic text is used only when the recipient is unknown.
+  BadRecipient: "Recipient must be another address, not zero and not this safe.",
   EmptyTransaction: "A transaction needs an amount or calldata.",
   DataTooLong: "Calldata is too long (max 4096 bytes).",
   ExceedsAvailableBalance:
@@ -54,6 +56,26 @@ const MESSAGES: Record<string, string> = {
 
 const iface = new ethers.Interface(ERROR_ABI);
 
+// Save.sol reverts with BadRecipient() in two different cases: to == address(0)
+// and to == address(this). Both share one 4-byte selector, so the exact reason
+// can only come from the recipient the caller tried to use.
+export type ContractErrorContext = {
+  // The recipient address of the attempted transaction.
+  to?: string;
+  // The address of the safe the transaction was created on.
+  safeAddress?: string;
+};
+
+const ZERO_ADDRESS_RE = /^0x0{40}$/;
+
+function badRecipientMessage(ctx?: ContractErrorContext): string {
+  const to = (ctx?.to || "").trim().toLowerCase();
+  const safe = (ctx?.safeAddress || "").trim().toLowerCase();
+  if (to && ZERO_ADDRESS_RE.test(to)) return "Recipient address cannot be zero.";
+  if (to && safe && to === safe) return "The safe cannot send to itself.";
+  return MESSAGES.BadRecipient;
+}
+
 // Revert data hides in a different place depending on which layer threw:
 // ethers itself, the wallet, or our RPC proxy.
 function revertData(e: any): string | null {
@@ -73,12 +95,16 @@ function revertData(e: any): string | null {
 
 // Returns a human-readable message for a known custom error, or null so the
 // caller can fall back to its generic error text.
-export function decodeContractError(e: any): string | null {
+export function decodeContractError(
+  e: any,
+  ctx?: ContractErrorContext,
+): string | null {
   const data = revertData(e);
   if (!data) return null;
   try {
     const parsed = iface.parseError(data);
     if (!parsed) return null;
+    if (parsed.name === "BadRecipient") return badRecipientMessage(ctx);
     return MESSAGES[parsed.name] ?? parsed.name;
   } catch {
     return null;

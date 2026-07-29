@@ -1,5 +1,8 @@
 import { ethers } from "ethers";
-import { decodeContractError } from "./errors";
+import {
+  decodeContractError,
+  type ContractErrorContext,
+} from "./errors";
 
 export function normAddr(x: string) {
   const a = (x || "").trim().toLowerCase();
@@ -16,13 +19,15 @@ export function short(a: string) {
   return a.slice(0, 6) + "..." + a.slice(-4);
 }
 
-export function errText(e: any) {
+// ctx lets the caller tell apart contract errors that share one selector,
+// such as BadRecipient() for the zero address and for the safe itself.
+export function errText(e: any, ctx?: ContractErrorContext) {
   if (e?.code === "TIMEOUT") return "Wallet request timed out. Open wallet and confirm.";
   if (e?.code === -32002) return "Wallet request already pending. Open wallet.";
   if (e?.code === 4001) return "Request rejected in wallet.";
 
   // A decoded custom error from the contracts beats the raw 4-byte selector.
-  const decoded = decodeContractError(e);
+  const decoded = decodeContractError(e, ctx);
   if (decoded) return decoded;
   return (
     e?.shortMessage ||

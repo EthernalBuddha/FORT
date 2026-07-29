@@ -56,6 +56,10 @@ const safeOwnersCache = new Map<string, string[]>();
 // closure goes stale, which made the background poll refetch the name every 15 seconds.
 const safeNameRequested = new Set<string>();
 
+// How many safe names are requested at the same time. Kept small so a wallet with
+// many safes cannot flood the node with one request per safe.
+const NAME_BATCH_SIZE = 5;
+
 export default function Page() {
   // Guard against repeated and parallel loads of the same safe: loadSafe is triggered
   // by the mount effect, the [wallet, loadedSafe] effect, auto-connect and the poll.
@@ -288,6 +292,8 @@ export default function Page() {
 
     setPending((x) => ({ ...x, syncSafes: true }));
     try {
+      setWalletMsg(null);
+
       const safes: string[] = await getFactoryReader().getSafesForOwner(w);
 
       for (const safe of safes) {
@@ -299,23 +305,34 @@ export default function Page() {
 
       // Names are fetched in parallel: a sequential loop meant one round trip per safe,
       // so with 20 safes on a slow node the sidebar filled in only after ~30 seconds.
+      // The batch is capped because an unbounded Promise.all fired every request at
+      // once and the public node answered with 429 instead of names.
       const addrs = safes
         .map((safe) => normAddr(safe))
         .filter(Boolean) as string[];
-      const fetched = await Promise.all(
-        addrs.map(
-          async (addr) =>
-            [addr.toLowerCase(), await fetchSafeName(addr)] as const,
-        ),
-      );
 
       const names: Record<string, string> = {};
-      for (const [key2, name] of fetched) {
-        if (name) names[key2] = name;
+      for (let i = 0; i < addrs.length; i += NAME_BATCH_SIZE) {
+        const batch = addrs.slice(i, i + NAME_BATCH_SIZE);
+        const fetched = await Promise.all(
+          batch.map(
+            async (addr) =>
+              [addr.toLowerCase(), await fetchSafeName(addr)] as const,
+          ),
+        );
+        for (const [key2, name] of fetched) {
+          if (name) names[key2] = name;
+        }
       }
       setSafeNames((prev) => ({ ...prev, ...names }));
       syncedWalletsRef.current.add(key);
-    } catch {
+    } catch (e: any) {
+      // Never swallow this error: an empty list plus silence looked exactly like
+      // "this wallet has no safes", which sent us hunting an imaginary incognito bug.
+      setWalletMsg({
+        kind: "err",
+        text: `Cannot load your safes: ${errText(e)}`,
+      });
       setCreatedSafes(getSafesForWallet(w));
     } finally {
       if (syncSafesInFlightRef.current === key)
@@ -334,7 +351,9 @@ export default function Page() {
     setTxHashes({});
     setTxConfirmedByOwner({});
     setTxCanceled({});
+    setTxCancelVotedByMe({});
     setBalance("0");
+    setAvailable("");
     setRowMenuOpenFor("");
     setRenameOpen(false);
     setRemoveOpen(false);
@@ -447,7 +466,9 @@ export default function Page() {
     setTxHashes({});
     setTxConfirmedByOwner({});
     setTxCanceled({});
+    setTxCancelVotedByMe({});
     setBalance("0");
+    setAvailable("");
   }
 
   async function loadSafe(

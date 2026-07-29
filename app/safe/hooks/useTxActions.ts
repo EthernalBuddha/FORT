@@ -274,6 +274,18 @@ export function useTxActions(deps: UseTxActionsDeps) {
         setTxMsg({ kind: "err", text: "Invalid recipient address" });
         return false;
       }
+      // Save.sol reverts with the same BadRecipient() selector for the zero address
+      // and for the safe itself, so both are rejected here, where the exact reason is
+      // still known and no gas has been spent yet.
+      if (to === ethers.ZeroAddress) {
+        setTxMsg({ kind: "err", text: "Recipient address cannot be zero." });
+        return false;
+      }
+      if (to.toLowerCase() === loadedSafe.toLowerCase()) {
+        setTxMsg({ kind: "err", text: "The safe cannot send to itself." });
+        return false;
+      }
+
       if (!txAmount) {
         setTxMsg({ kind: "err", text: "Enter amount" });
         return false;
@@ -369,7 +381,10 @@ export function useTxActions(deps: UseTxActionsDeps) {
       setTransferOpen(false);
       return true;
     } catch (e) {
-      setTxMsg({ kind: "err", text: errText(e) });
+      setTxMsg({
+        kind: "err",
+        text: errText(e, { to: normAddr(txTo) || txTo, safeAddress: loadedSafe }),
+      });
       return false;
     } finally {
       setPending((x) => ({ ...x, createTx: false }));

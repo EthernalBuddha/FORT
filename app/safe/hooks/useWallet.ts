@@ -7,7 +7,7 @@ import {
   ARC_CHAIN_ID,
   ARC_CHAIN_ID_HEX,
   ARC_CHAIN_PARAMS,
-  RPC_READ_URL,
+  getReadProvider,
   isArc,
 } from "../lib/chain";
 import { errText, isAddChainErr } from "../lib/format";
@@ -37,7 +37,11 @@ export type UseWalletOptions = {
   onDisconnect: () => void;
   // Reload the opened safe, optionally with a freshly built provider/signer pair.
   // `silent` keeps the spinner hidden for background refreshes.
-  reloadSafe: (ctx: WalletCtx | undefined, address: string, silent: boolean) => void;
+  reloadSafe: (
+    ctx: WalletCtx | undefined,
+    address: string,
+    silent: boolean
+  ) => void;
 };
 
 // Owns everything about the injected wallet: provider discovery, connection,
@@ -82,25 +86,37 @@ export function useWallet(options: UseWalletOptions) {
 
   function timeout(ms: number) {
     return new Promise((_, reject) => {
-      const er: any = new Error("Wallet request timed out");
-      er.code = "TIMEOUT";
-      setTimeout(() => reject(er), ms);
+      const error: any = new Error("Wallet request timed out");
+      error.code = "TIMEOUT";
+      setTimeout(() => reject(error), ms);
     });
   }
 
-  async function ethReq(eth: any, method: string, params?: any, ms = 25000) {
+  async function ethReq(
+    eth: any,
+    method: string,
+    params?: any,
+    ms = 25000
+  ) {
     if (!eth?.request) throw new Error("Wallet not found");
-    const p = params === undefined ? eth.request({ method }) : eth.request({ method, params });
-    return await Promise.race([p, timeout(ms)]);
+
+    const promise =
+      params === undefined
+        ? eth.request({ method })
+        : eth.request({ method, params });
+
+    return await Promise.race([promise, timeout(ms)]);
   }
 
   async function readChainIdDirect(eth: any) {
     try {
       if (!eth?.request) return 0;
+
       const hex = await ethReq(eth, "eth_chainId", undefined, 6000);
       if (typeof hex !== "string") return 0;
-      const v = parseInt(hex, 16);
-      return Number.isFinite(v) ? v : 0;
+
+      const value = parseInt(hex, 16);
+      return Number.isFinite(value) ? value : 0;
     } catch {
       return 0;
     }
@@ -108,31 +124,46 @@ export function useWallet(options: UseWalletOptions) {
 
   async function ensureConnected(eth: any) {
     if (!eth?.request) throw new Error("Wallet not found");
+
     try {
-      const accs = await ethReq(eth, "eth_accounts", undefined, 6000);
-      if (Array.isArray(accs) && accs.length) return true;
+      const accounts = await ethReq(eth, "eth_accounts", undefined, 6000);
+      if (Array.isArray(accounts) && accounts.length) return true;
     } catch {}
+
     await ethReq(eth, "eth_requestAccounts", undefined, 25000);
     return true;
   }
 
   async function ensureReadProvider() {
     const key = walletProviderKeyRef.current;
+
     if (key) {
       const eth = getEthByKey(key);
+
       if (eth?.request) {
-        const p = new ethers.BrowserProvider(eth);
-        setProvider(p);
-        const cid = await readChainIdDirect(eth);
-        if (cid) setChainId(cid);
-        return { provider: p, eth, kind: "wallet" as const };
+        const walletProvider = new ethers.BrowserProvider(eth);
+        setProvider(walletProvider);
+
+        const currentChainId = await readChainIdDirect(eth);
+        if (currentChainId) setChainId(currentChainId);
+
+        return {
+          provider: walletProvider,
+          eth,
+          kind: "wallet" as const,
+        };
       }
     }
 
-    const p = new ethers.JsonRpcProvider(RPC_READ_URL);
-    setProvider(p);
+    const readProvider = getReadProvider();
+    setProvider(readProvider);
     setChainId(ARC_CHAIN_ID);
-    return { provider: p, eth: null, kind: "rpc" as const };
+
+    return {
+      provider: readProvider,
+      eth: null,
+      kind: "rpc" as const,
+    };
   }
 
   async function ensureArcNetwork(eth: any) {
@@ -142,20 +173,37 @@ export function useWallet(options: UseWalletOptions) {
     if (isArc(current)) return true;
 
     optsRef.current.setPending({ switchNet: true });
+
     try {
       try {
-        await ethReq(eth, "wallet_switchEthereumChain", [{ chainId: ARC_CHAIN_ID_HEX }], 25000);
-      } catch (e: any) {
-        if (isAddChainErr(e)) {
-          await ethReq(eth, "wallet_addEthereumChain", [ARC_CHAIN_PARAMS], 25000);
-          await ethReq(eth, "wallet_switchEthereumChain", [{ chainId: ARC_CHAIN_ID_HEX }], 25000);
+        await ethReq(
+          eth,
+          "wallet_switchEthereumChain",
+          [{ chainId: ARC_CHAIN_ID_HEX }],
+          25000
+        );
+      } catch (error: any) {
+        if (isAddChainErr(error)) {
+          await ethReq(
+            eth,
+            "wallet_addEthereumChain",
+            [ARC_CHAIN_PARAMS],
+            25000
+          );
+          await ethReq(
+            eth,
+            "wallet_switchEthereumChain",
+            [{ chainId: ARC_CHAIN_ID_HEX }],
+            25000
+          );
         } else {
-          throw e;
+          throw error;
         }
       }
 
       const after = await readChainIdDirect(eth);
       if (after) setChainId(after);
+
       return isArc(after);
     } finally {
       optsRef.current.setPending({ switchNet: false });
@@ -168,7 +216,10 @@ export function useWallet(options: UseWalletOptions) {
   async function getWalletSigner() {
     const key = walletProviderKeyRef.current;
     const eth = key ? getEthByKey(key) : null;
-    if (!eth?.request) throw new Error("Wallet not detected. Reconnect.");
+
+    if (!eth?.request) {
+      throw new Error("Wallet not detected. Reconnect.");
+    }
 
     await ensureConnected(eth);
 
@@ -179,7 +230,12 @@ export function useWallet(options: UseWalletOptions) {
     const walletSigner = await walletProvider.getSigner();
     const address = await walletSigner.getAddress();
 
-    return { eth, provider: walletProvider, signer: walletSigner, address };
+    return {
+      eth,
+      provider: walletProvider,
+      signer: walletSigner,
+      address,
+    };
   }
 
   async function connectSelected(eth: any, key: string) {
@@ -188,45 +244,54 @@ export function useWallet(options: UseWalletOptions) {
 
     try {
       if (!eth?.request) {
-        setWalletMsg({ kind: "err", text: "Selected wallet is not detected." });
+        setWalletMsg({
+          kind: "err",
+          text: "Selected wallet is not detected.",
+        });
         return false;
       }
 
       ethRef.current = eth;
-      providersRef.current = { ...(providersRef.current || {}), [key]: eth };
+      providersRef.current = {
+        ...(providersRef.current || {}),
+        [key]: eth,
+      };
       setWalletProviderKey(key);
 
       await ensureConnected(eth);
 
       const ok = await ensureArcNetwork(eth);
       if (!ok) {
-        setWalletMsg({ kind: "err", text: `Switch to Arc Testnet (${ARC_CHAIN_ID}).` });
+        setWalletMsg({
+          kind: "err",
+          text: `Switch to Arc Testnet (${ARC_CHAIN_ID}).`,
+        });
         return false;
       }
 
-      const p2 = new ethers.BrowserProvider(eth);
-      const s2 = await p2.getSigner();
-      const a2 = await s2.getAddress();
+      const walletProvider = new ethers.BrowserProvider(eth);
+      const walletSigner = await walletProvider.getSigner();
+      const address = await walletSigner.getAddress();
 
-      setProvider(p2);
-      setSigner(s2);
-      setWallet(a2);
+      setProvider(walletProvider);
+      setSigner(walletSigner);
+      setWallet(address);
       setWalletModalOpen(false);
 
       try {
         localStorage.setItem(CONNECTED_WALLET_KEY, key);
       } catch {}
 
-      const cid = await readChainIdDirect(eth);
-      if (cid) setChainId(cid);
+      const currentChainId = await readChainIdDirect(eth);
+      if (currentChainId) setChainId(currentChainId);
 
-      optsRef.current.onWalletConnected(a2);
+      optsRef.current.onWalletConnected(address);
       // Do not start the safe load here: setWallet above already triggers the
       // [wallet, loadedSafe] effect. The two calls ran sequentially, so the in-flight guard missed them.
 
       return true;
-    } catch (e) {
-      setWalletMsg({ kind: "err", text: errText(e) });
+    } catch (error) {
+      setWalletMsg({ kind: "err", text: errText(error) });
       return false;
     } finally {
       optsRef.current.setPending({ connect: false });
@@ -265,13 +330,29 @@ export function useWallet(options: UseWalletOptions) {
         const eth = (window as any).ethereum;
         if (!eth) return;
 
-        const providers = Array.isArray(eth?.providers) && eth.providers.length ? eth.providers : eth ? [eth] : [];
+        const providers =
+          Array.isArray(eth?.providers) && eth.providers.length
+            ? eth.providers
+            : eth
+              ? [eth]
+              : [];
 
         let targetEth = null;
-        for (const p of providers) {
-          const name = p?.isMetaMask ? "metamask" : p?.isRabby ? "rabby" : p?.isCoinbaseWallet ? "coinbase" : "";
-          if (name === savedKey || (savedKey === "injected" && providers.length === 1)) {
-            targetEth = p;
+
+        for (const candidate of providers) {
+          const name = candidate?.isMetaMask
+            ? "metamask"
+            : candidate?.isRabby
+              ? "rabby"
+              : candidate?.isCoinbaseWallet
+                ? "coinbase"
+                : "";
+
+          if (
+            name === savedKey ||
+            (savedKey === "injected" && providers.length === 1)
+          ) {
+            targetEth = candidate;
             break;
           }
         }
@@ -281,7 +362,10 @@ export function useWallet(options: UseWalletOptions) {
         }
 
         if (targetEth) {
-          const accounts = await targetEth.request({ method: "eth_accounts" });
+          const accounts = await targetEth.request({
+            method: "eth_accounts",
+          });
+
           if (accounts && accounts.length > 0) {
             await connectSelected(targetEth, savedKey);
           }
@@ -296,51 +380,69 @@ export function useWallet(options: UseWalletOptions) {
   // Nudge a connected wallet back to Arc when it sits on another network.
   useEffect(() => {
     if (!wallet) return;
-    const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
+
+    const eth = walletProviderKey
+      ? getEthByKey(walletProviderKey)
+      : null;
+
     if (!eth?.request) return;
     if (options.switchingNetwork) return;
     if (chainId && isArc(chainId)) return;
     if (autoSwitchRef.current) return;
 
     autoSwitchRef.current = true;
+
     (async () => {
       try {
         await ensureConnected(eth);
+
         const ok = await ensureArcNetwork(eth);
         const safe = optsRef.current.loadedSafe;
-        if (ok && safe) optsRef.current.reloadSafe(undefined, "", false);
+
+        if (ok && safe) {
+          optsRef.current.reloadSafe(undefined, "", false);
+        }
       } catch {
       } finally {
         autoSwitchRef.current = false;
       }
     })();
-  }, [wallet, chainId, walletProviderKey, options.loadedSafe, options.switchingNetwork]);
+  }, [
+    wallet,
+    chainId,
+    walletProviderKey,
+    options.loadedSafe,
+    options.switchingNetwork,
+  ]);
 
   // Account and chain switches performed inside the wallet UI.
   useEffect(() => {
-    const eth = walletProviderKey ? getEthByKey(walletProviderKey) : null;
+    const eth = walletProviderKey
+      ? getEthByKey(walletProviderKey)
+      : null;
+
     if (!eth?.on) return;
 
     const onAccounts = async () => {
       try {
-        const p = new ethers.BrowserProvider(eth);
-        setProvider(p);
+        const walletProvider = new ethers.BrowserProvider(eth);
+        setProvider(walletProvider);
 
-        const cid = await readChainIdDirect(eth);
-        if (cid) setChainId(cid);
+        const currentChainId = await readChainIdDirect(eth);
+        if (currentChainId) setChainId(currentChainId);
 
-        let s2: any = null;
-        let addr = "";
+        let nextSigner: any = null;
+        let address = "";
 
         try {
-          s2 = await p.getSigner();
-          addr = await s2.getAddress();
+          nextSigner = await walletProvider.getSigner();
+          address = await nextSigner.getAddress();
         } catch {}
 
-        if (s2 && addr) {
-          setSigner(s2);
-          setWallet(addr);
-          optsRef.current.onWalletConnected(addr);
+        if (nextSigner && address) {
+          setSigner(nextSigner);
+          setWallet(address);
+          optsRef.current.onWalletConnected(address);
         } else {
           setSigner(null);
           setWallet("");
@@ -348,44 +450,64 @@ export function useWallet(options: UseWalletOptions) {
         }
 
         if (optsRef.current.loadedSafe) {
-          optsRef.current.reloadSafe({ provider: p, signer: s2 || null }, addr || "", false);
+          optsRef.current.reloadSafe(
+            {
+              provider: walletProvider,
+              signer: nextSigner || null,
+            },
+            address || "",
+            false
+          );
         }
       } catch {}
     };
 
     const onChain = async (hexId?: any) => {
       try {
-        const p = new ethers.BrowserProvider(eth);
-        setProvider(p);
+        const walletProvider = new ethers.BrowserProvider(eth);
+        setProvider(walletProvider);
 
         // The event already carries the new chain id. Trust it first: right after a
         // switch the wallet often answers eth_chainId late or not at all, and the old
         // code then kept the stale id, so the wrong-network banner never went away.
-        let cid = 0;
-        if (typeof hexId === "string") {
-          const v = parseInt(hexId, 16);
-          if (Number.isFinite(v)) cid = v;
-        }
-        if (!cid) cid = await readChainIdDirect(eth);
-        if (!cid) {
-          await new Promise((r) => setTimeout(r, 400));
-          cid = await readChainIdDirect(eth);
-        }
-        if (cid) setChainId(cid);
+        let currentChainId = 0;
 
-        let s2: any = null;
-        let addr = "";
+        if (typeof hexId === "string") {
+          const value = parseInt(hexId, 16);
+          if (Number.isFinite(value)) currentChainId = value;
+        }
+
+        if (!currentChainId) {
+          currentChainId = await readChainIdDirect(eth);
+        }
+
+        if (!currentChainId) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          currentChainId = await readChainIdDirect(eth);
+        }
+
+        if (currentChainId) setChainId(currentChainId);
+
+        let nextSigner: any = null;
+        let address = "";
 
         try {
-          s2 = await p.getSigner();
-          addr = await s2.getAddress();
-          setSigner(s2);
-          setWallet(addr);
-          optsRef.current.onWalletConnected(addr);
+          nextSigner = await walletProvider.getSigner();
+          address = await nextSigner.getAddress();
+          setSigner(nextSigner);
+          setWallet(address);
+          optsRef.current.onWalletConnected(address);
         } catch {}
 
         if (optsRef.current.loadedSafe) {
-          optsRef.current.reloadSafe({ provider: p, signer: s2 || null }, addr || "", false);
+          optsRef.current.reloadSafe(
+            {
+              provider: walletProvider,
+              signer: nextSigner || null,
+            },
+            address || "",
+            false
+          );
         }
       } catch {}
     };
@@ -417,33 +539,42 @@ export function useWallet(options: UseWalletOptions) {
       const eth = getEthByKey(walletProviderKey);
       if (!eth?.request) return;
 
-      const cid = await readChainIdDirect(eth);
-      if (!cid || stopped) return;
+      const currentChainId = await readChainIdDirect(eth);
+      if (!currentChainId || stopped) return;
 
-      setChainId((prev: any) => (prev === cid ? prev : cid));
+      setChainId((previous: any) =>
+        previous === currentChainId ? previous : currentChainId
+      );
 
-      if (!isArc(cid)) {
+      if (!isArc(currentChainId)) {
         wasWrong = true;
         return;
       }
+
       if (wasWrong) {
         wasWrong = false;
+
         // Back on Arc: refresh the safe, its data was never loaded on the wrong network.
-        if (optsRef.current.loadedSafe) optsRef.current.reloadSafe(undefined, "", true);
+        if (optsRef.current.loadedSafe) {
+          optsRef.current.reloadSafe(undefined, "", true);
+        }
       }
     };
 
     const timer = setInterval(check, 4000);
-    const onVis = () => void check();
+    const onVisibilityChange = () => void check();
 
-    window.addEventListener("focus", onVis);
-    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVisibilityChange);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       stopped = true;
       clearInterval(timer);
-      window.removeEventListener("focus", onVis);
-      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onVisibilityChange);
+      document.removeEventListener(
+        "visibilitychange",
+        onVisibilityChange
+      );
     };
   }, [walletProviderKey, wallet, options.loadedSafe]);
 

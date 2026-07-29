@@ -213,7 +213,7 @@ export default function WalletConnectModal({ open, onClose, onSelect }) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search through ${list.length} wallets...`}
+            placeholder="Search"
             autoComplete="off"
             spellCheck={false}
           />

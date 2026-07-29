@@ -24,14 +24,19 @@ export type SafeSnapshot = {
 };
 
 // Reading a batch of transactions in one call instead of one request per record.
-// Each record carries its `data` field, up to MAX_DATA_LENGTH (4096) bytes, so the chunk
-// size caps the worst-case response at roughly 100 kB instead of 200 kB.
-const TX_CHUNK = 25;
+// getTxSummaries omits the `data` field and returns its length instead, so every record
+// has a fixed size of about 450 bytes and the response no longer depends on calldata.
+const TX_CHUNK = 50;
 
 // Background polls only re-read the tail of the list. Older transactions are already
 // executed or canceled and never change again, so refetching them every 15 seconds
 // just wastes traffic. The full list is still read on any non-silent load.
 const TX_TAIL = 20;
+
+// A tail-only background refresh froze open transactions below the window: a
+// confirmation or a cancel vote cast by another owner appeared only after a full
+// page reload. Those are re-read too, capped so the poll stays cheap.
+const OPEN_REFRESH_LIMIT = 30;
 
 // The owners of a safe are fixed at creation time, so a failure here means the network
 // is unreachable or there is no contract at this address.
@@ -128,6 +133,21 @@ export async function fetchSafeSnapshot(args: {
     cachedTxs.length >= count - TX_TAIL;
   const tailStart = canUseTail ? count - TX_TAIL : 0;
 
+  // Ids of transactions below the tail window that are still open and can change.
+  const refreshIds: number[] = [];
+  if (tailStart > 0) {
+    for (const t of cachedTxs) {
+      const id = Number(t?.id);
+      if (!Number.isFinite(id) || id >= tailStart) continue;
+      if (t?.executed || cached?.cancel?.[id]) continue;
+      refreshIds.push(id);
+    }
+    refreshIds.sort((a, b) => a - b);
+    // Keep the newest ones if a safe somehow has many open transactions.
+    if (refreshIds.length > OPEN_REFRESH_LIMIT)
+      refreshIds.splice(0, refreshIds.length - OPEN_REFRESH_LIMIT);
+  }
+
   if (tailStart > 0) {
     // Reuse the cached snapshot for everything below the tail window.
     for (const t of cachedTxs) {
@@ -150,7 +170,7 @@ export async function fetchSafeSnapshot(args: {
   for (let base = tailStart; base < count; base += TX_CHUNK) {
     let batch: any[] = [];
     try {
-      batch = await safeReader.getTxs(base, Math.min(TX_CHUNK, count - base));
+      batch = await safeReader.getTxSummaries(base, Math.min(TX_CHUNK, count - base));
     } catch {
       batch = [];
     }
@@ -172,6 +192,58 @@ export async function fetchSafeSnapshot(args: {
         executed: Number(v.executedBlock),
       };
     }
+  }
+
+  // Neighbouring ids are grouped into ranges, so refreshing open transactions
+  // usually costs one extra call rather than one call per transaction.
+  if (refreshIds.length) {
+    const ranges: Array<{ base: number; len: number }> = [];
+    for (const id of refreshIds) {
+      const last = ranges[ranges.length - 1];
+      if (last && id === last.base + last.len) last.len += 1;
+      else ranges.push({ base: id, len: 1 });
+    }
+
+    const indexById = new Map<number, number>();
+    items.forEach((t, i) => indexById.set(t.id, i));
+
+    for (const r of ranges) {
+      let batch: any[] = [];
+      try {
+        batch = await safeReader.getTxSummaries(r.base, r.len);
+      } catch {
+        // A failed refresh must not drop a transaction: keep the cached copy.
+        batch = [];
+      }
+      for (const v of batch) {
+        const id = Number(v?.id);
+        if (!Number.isFinite(id)) continue;
+        const fresh: SafeTx = {
+          id,
+          to: v.to,
+          amount: v.amount,
+          executed: !!v.executed,
+          confirms: Number(v.confirms),
+          cancelVotes: Number(v.cancelVoteCount || 0),
+        };
+        const at = indexById.get(id);
+        if (at === undefined) items.push(fresh);
+        else items[at] = fresh;
+        cancelMap[id] = !!v.isCanceled;
+        sigMap[id] = [
+          !!v.confirmedBy?.[0],
+          !!v.confirmedBy?.[1],
+          !!v.confirmedBy?.[2],
+        ];
+        blockMap[id] = {
+          created: Number(v.createdBlock),
+          executed: Number(v.executedBlock),
+        };
+      }
+    }
+
+    // Cached rows, tail rows and refreshed rows are merged, so restore id order.
+    items.sort((a, b) => a.id - b.id);
   }
 
   const txHashes: Record<number, string> = {};
