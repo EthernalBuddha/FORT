@@ -4,6 +4,7 @@ import { ethers } from "ethers";
 
 import { NATIVE_DECIMALS, NATIVE_SYMBOL, THRESHOLD } from "../lib/chain";
 import { short } from "../lib/format";
+import { Msg } from "./ui";
 import type { SafeTx } from "../lib/safeData";
 
 export type TxActionState = { id: number; action: string } | null;
@@ -15,6 +16,7 @@ export type TxCardProps = {
   ownerIndex: number;
   // Confirmation flag per owner slot.
   sigs: boolean[];
+  msg?: any;
   isCanceled: boolean;
   // Whether the connected owner already voted to cancel.
   iVotedCancel: boolean;
@@ -34,6 +36,7 @@ export function TxCard({
   owners,
   ownerIndex,
   sigs,
+  msg,
   isCanceled,
   iVotedCancel,
   explorerUrl,
@@ -53,6 +56,11 @@ export function TxCard({
 
   // Cancellation needs THRESHOLD votes, so votes are shown like confirmations.
   const cancelVotes = Number(tx.cancelVotes || 0);
+
+  // After quorum the contract reverts cancelTx with QuorumReached, so this
+  // button could only burn a wallet signature.
+  const cancelBlockedByQuorum =
+    !tx.executed && !isCanceled && tx.confirms >= THRESHOLD;
   const meConfirmed = ownerIndex >= 0 ? !!sigs[ownerIndex] : false;
 
   const statusText = tx.executed
@@ -193,9 +201,13 @@ export function TxCard({
                 <button
                   className="btn btnCancel"
                   onClick={() => onCancel(tx.id)}
-                  disabled={disableRow}
+                  disabled={disableRow || cancelBlockedByQuorum}
                   type="button"
-                  title={`Cancellation needs ${THRESHOLD} owner votes`}
+                  title={
+                    cancelBlockedByQuorum
+                      ? "Blocked: quorum reached. One confirming owner must revoke their confirmation first."
+                      : `Cancellation needs ${THRESHOLD} owner votes`
+                  }
                 >
                   {isCanceling
                     ? "Voting…"
@@ -208,6 +220,8 @@ export function TxCard({
           ) : null}
         </div>
       </div>
+
+      {msg ? <Msg m={msg} /> : null}
 
       {explorerUrl ? (
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>

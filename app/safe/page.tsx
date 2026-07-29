@@ -1513,7 +1513,7 @@ export default function Page() {
                       Transactions
                     </div>
 
-                    <Msg m={txMsg} />
+                    <Msg m={txMsg && txMsg.id == null ? txMsg : null} />
 
                     {!canView ? (
                       <div
@@ -1551,6 +1551,7 @@ export default function Page() {
                             onExecute={executeTx}
                             onCancel={cancelTx}
                             onRevokeCancelVote={revokeCancelVote}
+                            msg={txMsg && txMsg.id === t.id ? txMsg : null}
                           />
                         ))}
                       </div>

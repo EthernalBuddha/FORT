@@ -467,10 +467,10 @@ export function useTxActions(deps: UseTxActionsDeps) {
           : `cancel vote ${Math.max(1, votes)}/${THRESHOLD} recorded \u2014 the transaction is still active`;
       }
 
-      setTxMsg({ kind: "ok", text: `TX ${id} ${label}`, hash: tx.hash });
+      setTxMsg({ kind: "ok", text: `TX ${id} ${label}`, hash: tx.hash, id });
       await loadSafe(loadedSafe, undefined, undefined, false, true);
     } catch (e) {
-      setTxMsg({ kind: "err", text: errText(e) });
+      setTxMsg({ kind: "err", text: errText(e), id });
     } finally {
       setPending((x) => ({ ...x, txAction: null }));
     }
