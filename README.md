@@ -9,7 +9,7 @@ https://fortsafe.vercel.app/
 - Auto add/switch to Arc Testnet
 - Safe flow: 3 owners, threshold 2 of 3
 - Create / confirm / revoke / execute transfers
-- Cancel a pending transfer: also 2 of 3, a single vote only records intent and can be revoked
+- Cancel a pending transfer: also 2 of 3, a single vote only records intent and can be revoked. One exception: the proposer can cancel their own transfer alone, as long as no other owner has confirmed it
 - On-chain Safe names, stored in the factory
 - Sync: reads the caller's Safes from the factory via `getSafesForOwner`
 - Reads made in the browser go through the app's own RPC proxy (`/api/rpc`); the wallet is
@@ -26,7 +26,7 @@ read the same state directly from a node or a block explorer.
 What is actually enforced on-chain is authorization to act, not to look:
 - only an owner can create, confirm, revoke, cancel or execute a transfer;
 - a transfer executes only with 2 of 3 confirmations;
-- a transfer is canceled only with 2 of 3 cancel votes.
+- a transfer is canceled only with 2 of 3 cancel votes, with one exception: the proposer may cancel their own transfer alone while no other owner has confirmed it.
 
 Treat the Safe's contents as public information.
 
@@ -88,7 +88,7 @@ would be required for that.
 
 ## Contracts
 - Factory: `0xc965e062f93F35507DF0F9E9a3973F04704215dA` (deployed at block 54284174)
-- Events: `SaveCreated`, `TxCreated`, `TxConfirmed`, `TxExecuted`, `TxCanceled`, `TxCancelVoted`
+- Events: `SaveCreated`, `SafeRenamed`, `Deposit`, `TxCreated`, `TxConfirmed`, `TxRevoked`, `TxCancelVoted`, `TxCancelVoteRevoked`, `TxCanceled`, `TxExecuted`
 - Sources and tests: `fort-contracts` (Foundry)
 
 ## Project layout
