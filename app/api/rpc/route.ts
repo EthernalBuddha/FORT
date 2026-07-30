@@ -509,13 +509,28 @@ function idOf(item: unknown): RpcId {
   return null;
 }
 
+// JSON-RPC 2.0: a notification is a request with no "id" member at all.
+// A present-but-null id is a normal request and must be answered.
+//
+// The old "idOf(item) === undefined" clause was dead code: idOf returns null,
+// never undefined, so it never fired and only looked like a guard.
 function isNotification(item: unknown): boolean {
   return (
     !item ||
     typeof item !== "object" ||
-    !("id" in (item as Record<string, unknown>)) ||
-    idOf(item) === undefined
+    !("id" in (item as Record<string, unknown>))
   );
+}
+
+// The spec allows a string, a number or null as an id. Anything else cannot be
+// echoed back in a form the client can match against its own call, so it is
+// rejected instead of being quietly answered with id: null.
+function hasValidId(item: unknown): boolean {
+  if (isNotification(item)) return true;
+
+  const id = (item as Record<string, unknown>).id;
+
+  return id === null || typeof id === "string" || typeof id === "number";
 }
 
 async function requestUpstream(
@@ -554,6 +569,12 @@ async function callSingle(
   const id = idOf(item);
   const notification = isNotification(item);
   const method = methodOf(item);
+
+  if (!hasValidId(item)) {
+    console.error("[rpc-proxy] invalid request id");
+
+    return rpcError(null, -32600, "invalid request id");
+  }
 
   if (!ALLOWED_METHODS.has(method)) {
     console.error("[rpc-proxy] method not allowed", {
@@ -650,6 +671,22 @@ async function callSingle(
   }
 }
 
+// Liveness probe for this route. It never touches the node, so a monitor
+// hitting it costs nothing and it says nothing about upstream health. The
+// numbers below are limits already visible from the outside by probing.
+export async function GET() {
+  return NextResponse.json(
+    {
+      ok: true,
+      upstream: new URL(ARC_RPC_URL).host,
+      methods: ALLOWED_METHODS.size,
+      maxBodyBytes: MAX_BODY_BYTES,
+      maxBatchItems: MAX_BATCH_ITEMS,
+    },
+    { status: 200, headers: { "cache-control": "no-store" } }
+  );
+}
+
 export async function POST(req: NextRequest) {
   const deadlineAt = Date.now() + POST_DEADLINE_MS;
   const rate = takeToken(getClientKey(req));
@@ -671,9 +708,32 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // content-length may be absent or a lie, so it is only a cheap early exit
+  // that avoids buffering an oversized body. The real check is below.
+  const declaredBytes = Number(req.headers.get("content-length"));
+
+  if (Number.isFinite(declaredBytes) && declaredBytes > MAX_BODY_BYTES) {
+    console.error("[rpc-proxy] body too large", {
+      bytes: declaredBytes,
+      declared: true,
+    });
+
+    return NextResponse.json(
+      rpcError(null, -32600, "request body too large"),
+      { status: 413 }
+    );
+  }
+
   const raw = await req.text();
 
-  if (raw.length > MAX_BODY_BYTES) {
+  // raw.length counts UTF-16 code units, not bytes. Non-ASCII text weighs up
+  // to three bytes per unit, so the old check let through several times the
+  // limit this constant promises.
+  const bodyBytes = Buffer.byteLength(raw, "utf8");
+
+  if (bodyBytes > MAX_BODY_BYTES) {
+    console.error("[rpc-proxy] body too large", { bytes: bodyBytes });
+
     return NextResponse.json(
       rpcError(null, -32600, "request body too large"),
       { status: 413 }
