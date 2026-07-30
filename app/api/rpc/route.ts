@@ -17,6 +17,13 @@ const MAX_BATCH_ITEMS = 20;
 const UPSTREAM_TIMEOUT_MS = 10_000;
 const MAX_CACHE_ENTRIES = 500;
 
+// Per-client rate limit. Coarse on purpose: the counter lives in this instance's
+// memory, like the 120 ms queue above, so it stops a single misbehaving script
+// but not a distributed load.
+const RATE_LIMIT_WINDOW_MS = 10_000;
+const RATE_LIMIT_MAX_REQUESTS = 60;
+const RATE_LIMIT_MAX_CLIENTS = 1000;
+
 const CACHE_TTL_MS = {
   forever: Infinity,
   long: 5 * 60 * 1000,
@@ -57,6 +64,57 @@ let lastCallAt = 0;
 let chain: Promise<unknown> = Promise.resolve();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type RateBucket = { tokens: number; updatedAt: number };
+
+const rateBuckets = new Map<string, RateBucket>();
+
+// The platform sets x-forwarded-for; the left-most entry is the client. Any
+// value here can be spoofed, so this is a speed bump, not authentication.
+function getClientKey(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+
+  if (forwarded) {
+    const first = forwarded.split(",")[0];
+    if (first && first.trim()) return first.trim();
+  }
+
+  const realIp = req.headers.get("x-real-ip");
+  if (realIp && realIp.trim()) return realIp.trim();
+
+  return "unknown";
+}
+
+function takeToken(key: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const refillPerMs = RATE_LIMIT_MAX_REQUESTS / RATE_LIMIT_WINDOW_MS;
+
+  if (rateBuckets.size > RATE_LIMIT_MAX_CLIENTS) {
+    for (const [bucketKey, bucket] of rateBuckets) {
+      if (now - bucket.updatedAt > RATE_LIMIT_WINDOW_MS) {
+        rateBuckets.delete(bucketKey);
+      }
+    }
+
+    if (rateBuckets.size > RATE_LIMIT_MAX_CLIENTS) rateBuckets.clear();
+  }
+
+  const existing = rateBuckets.get(key);
+  const tokens = existing
+    ? Math.min(
+        RATE_LIMIT_MAX_REQUESTS,
+        existing.tokens + (now - existing.updatedAt) * refillPerMs
+      )
+    : RATE_LIMIT_MAX_REQUESTS;
+
+  if (tokens < 1) {
+    rateBuckets.set(key, { tokens, updatedAt: now });
+    return { allowed: false, retryAfterMs: Math.ceil((1 - tokens) / refillPerMs) };
+  }
+
+  rateBuckets.set(key, { tokens: tokens - 1, updatedAt: now });
+  return { allowed: true, retryAfterMs: 0 };
+}
 
 type RpcId = string | number | null;
 type RpcObject = Record<string, unknown>;
@@ -497,6 +555,16 @@ async function callSingle(
 
 export async function POST(req: NextRequest) {
   const deadlineAt = Date.now() + POST_DEADLINE_MS;
+  const rate = takeToken(getClientKey(req));
+
+  if (!rate.allowed) {
+    console.error("[rpc-proxy] rate limit hit");
+    return NextResponse.json(rpcError(null, -32005, "too many requests"), {
+      status: 429,
+      headers: { "retry-after": String(Math.ceil(rate.retryAfterMs / 1000)) },
+    });
+  }
+
   const raw = await req.text();
 
   if (raw.length > MAX_BODY_BYTES) {
