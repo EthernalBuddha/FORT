@@ -224,6 +224,8 @@ function getCacheKey(method: string, params: unknown): string {
   return `${method}|${JSON.stringify(params)}`;
 }
 
+const MAX_LOG_BLOCK_SPAN = 100;
+
 function isFixedBlockTag(value: unknown): boolean {
   return typeof value === "string" && /^0x[0-9a-f]+$/i.test(value);
 }
@@ -243,6 +245,53 @@ function isFixedLogsRequest(params: unknown): boolean {
     isFixedBlockTag(filter.fromBlock) &&
     isFixedBlockTag(filter.toBlock) &&
     filter.fromBlock === filter.toBlock
+  );
+}
+
+// eth_getLogs: refuse windows wider than MAX_LOG_BLOCK_SPAN blocks.
+// Returns an error message, or null when the request is acceptable.
+function logsRangeError(params: unknown): string | null {
+  if (!Array.isArray(params) || !params[0] || typeof params[0] !== "object") {
+    return null;
+  }
+
+  const filter = params[0] as Record<string, unknown>;
+
+  // A single block addressed by hash is always one block wide.
+  if (typeof filter.blockHash === "string") {
+    return null;
+  }
+
+  // Per the JSON-RPC spec both bounds default to "latest" when omitted.
+  const from = filter.fromBlock === undefined ? "latest" : filter.fromBlock;
+  const to = filter.toBlock === undefined ? "latest" : filter.toBlock;
+
+  if (isFixedBlockTag(from) && isFixedBlockTag(to)) {
+    const span = BigInt(to as string) - BigInt(from as string) + BigInt(1);
+
+    if (span > BigInt(MAX_LOG_BLOCK_SPAN)) {
+      return (
+        "eth_getLogs range too wide: " +
+        span.toString() +
+        " blocks, max " +
+        MAX_LOG_BLOCK_SPAN
+      );
+    }
+
+    return null;
+  }
+
+  // Identical symbolic tags ("latest" to "latest") also describe one block.
+  if (typeof from === "string" && from === to) {
+    return null;
+  }
+
+  // Anything else is open ended: "earliest" to "latest", or a hex bound paired
+  // with a moving tag. The width cannot be checked without asking the node.
+  return (
+    "eth_getLogs requires a fixed block range of at most " +
+    MAX_LOG_BLOCK_SPAN +
+    " blocks"
   );
 }
 
@@ -518,6 +567,18 @@ async function callSingle(
       -32601,
       `method not allowed: ${method || "(missing)"}`
     );
+  }
+
+  if (method === "eth_getLogs") {
+    const rangeError = logsRangeError(paramsOf(item));
+
+    if (rangeError) {
+      console.error("[rpc-proxy] logs range rejected", { message: rangeError });
+
+      if (notification) return null;
+
+      return rpcError(id, -32602, rangeError);
+    }
   }
 
   if (remainingTime(deadlineAt) <= 0) {
