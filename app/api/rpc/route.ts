@@ -24,6 +24,15 @@ const RATE_LIMIT_WINDOW_MS = 10_000;
 const RATE_LIMIT_MAX_REQUESTS = 60;
 const RATE_LIMIT_MAX_CLIENTS = 1000;
 
+// Browser traffic has to come from our own site. Any header below can be forged
+// by a hand-written client, so this only stops a third-party page from routing
+// its users through our domain. It is not authentication.
+const ALLOWED_ORIGIN_HOSTS = new Set([
+  "fortsafe.vercel.app",
+  "localhost",
+  "127.0.0.1",
+]);
+
 const CACHE_TTL_MS = {
   forever: Infinity,
   long: 5 * 60 * 1000,
@@ -64,6 +73,33 @@ let lastCallAt = 0;
 let chain: Promise<unknown> = Promise.resolve();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type SourceCheck = { allowed: boolean; reason: string };
+
+// A request with neither header is server side code or curl, and it passes: the
+// browser always sends Origin on a cross-origin POST with a JSON body. Preview
+// deployments are covered through VERCEL_URL.
+function checkSource(req: NextRequest): SourceCheck {
+  const candidate = req.headers.get("origin") || req.headers.get("referer");
+
+  if (!candidate) return { allowed: true, reason: "no origin header" };
+
+  let host = "";
+
+  try {
+    host = new URL(candidate).hostname;
+  } catch {
+    return { allowed: false, reason: "unparsable origin " + candidate };
+  }
+
+  if (ALLOWED_ORIGIN_HOSTS.has(host)) return { allowed: true, reason: host };
+
+  const vercelHost = process.env.VERCEL_URL;
+
+  if (vercelHost && host === vercelHost) return { allowed: true, reason: host };
+
+  return { allowed: false, reason: "host not allowed " + host };
+}
 
 type RateBucket = { tokens: number; updatedAt: number };
 
@@ -562,6 +598,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(rpcError(null, -32005, "too many requests"), {
       status: 429,
       headers: { "retry-after": String(Math.ceil(rate.retryAfterMs / 1000)) },
+    });
+  }
+
+  const source = checkSource(req);
+
+  if (!source.allowed) {
+    console.error("[rpc-proxy] blocked source: " + source.reason);
+    return NextResponse.json(rpcError(null, -32600, "origin not allowed"), {
+      status: 403,
     });
   }
 
