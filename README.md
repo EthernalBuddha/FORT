@@ -11,7 +11,8 @@ https://fortsafe.vercel.app/
 - Create / confirm / revoke / execute transfers
 - Cancel a pending transfer: also 2 of 3, a single vote only records intent and can be revoked. One exception: the proposer can cancel their own transfer alone, as long as no other owner has confirmed it
 - On-chain Safe names, stored in the factory
-- Sync: reads the caller's Safes from the factory via `getSafesForOwner`
+- Sync: reads the caller's Safes from the factory page by page (`safesCountForOwner` +
+  `getSafesForOwnerPaged`), so the list never arrives in one unbounded `eth_call`
 - Reads made in the browser go through the app's own RPC proxy (`/api/rpc`); the wallet is
   used only for signing and network detection
 
@@ -33,8 +34,8 @@ Treat the Safe's contents as public information.
 ## Balances
 The contract reserves the amount of every created transfer in `pendingAmount`, so two
 numbers are not the same:
-- **balance** — everything the Safe holds;
-- **available balance** — what is left after the reservations of pending transfers.
+- **balance** вЂ” everything the Safe holds;
+- **available balance** вЂ” what is left after the reservations of pending transfers.
 
 Creating a transfer is checked against the available balance, executing one against the
 full balance: the reservation is released as the transfer executes.
@@ -53,8 +54,11 @@ it decides what reaches the upstream node.
 What it enforces on the way in:
 - **method allowlist** - 14 read-only JSON-RPC methods; anything else is rejected with
   `-32601`, so the proxy cannot be used as a generic relay;
-- **origin check** - `Origin` / `Referer` must match a known host, otherwise `403`;
-- **rate limit** - a token bucket per client IP, 60 requests per 10 s window;
+- **origin check** - `Origin` (or `Referer` as a fallback) is mandatory and must match a
+  known host; a request carrying neither header is refused with `403`, so the proxy is not
+  a free gateway to the node for anyone with `curl`;
+- **rate limit** - a token bucket per client, 60 requests per 10 s window, keyed on
+  `x-vercel-forwarded-for`, which the Vercel edge sets and a client cannot spoof;
 - **size limits** - request bodies over 128 KB are rejected with `413` (checked against the
   declared `content-length` first, then against the real byte length of the body, not its
   character count), and batches are capped at 20 items;
@@ -73,10 +77,29 @@ What it does on the way out:
 `GET /api/rpc` returns a small health object: upstream host, allowlist size and the current
 limits.
 
-One honest limitation: the rate limiter and the cache live in the memory of a single
-instance. On serverless deployments the counters are diluted across instances, so the limit
-is a guard against accidental hammering, not against a distributed one. A shared store
-would be required for that.
+### Known limitations
+
+Both of these are deliberate choices for a testnet deployment, not oversights. They are
+listed here so that nobody reads more strength into the proxy than it has.
+
+**The origin check is not authentication.** It only requires the header to be present and
+to name a known host, and a client sets that header freely. A request forged with
+`curl -H "Origin: https://fortsafe.vercel.app"` still passes. What the check removes is the
+casual free ride, not a determined caller. Real authentication would mean a shared secret
+or a signed request issued by the page, which is deliberately out of scope while this runs
+on a testnet with no cost attached to the upstream node.
+
+**The rate limiter and the cache are per instance, best-effort.** `rateBuckets`, `cache`,
+`lastCallAt` and the serialized queue are plain in-memory state. Serverless platforms run
+as many instances as traffic demands and each gets its own copy, so "60 requests per 10 s"
+is enforced per instance rather than globally, and a cache hit depends on which instance
+served the request. The limiter is therefore a guard against accidental hammering - a
+runtime loop in the UI, a stuck retry - and not a defense against a distributed one.
+
+Both are worth revisiting under one condition: the app moving to mainnet or the public
+domain taking real traffic. The replacement for the second one is a shared store for the
+counters and the cache, such as Vercel KV or Upstash Redis; until then the added
+dependency buys nothing.
 
 ## Network
 - Name: Arc Testnet
