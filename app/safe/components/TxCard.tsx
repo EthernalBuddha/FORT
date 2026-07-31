@@ -63,6 +63,21 @@ export function TxCard({
     !tx.executed && !isCanceled && tx.confirms >= THRESHOLD;
   const meConfirmed = ownerIndex >= 0 ? !!sigs[ownerIndex] : false;
 
+  // A transaction that reached quorum cannot be canceled - the contract reverts
+  // cancelTx with QuorumReached - so while executeTx keeps failing the amount stays
+  // reserved in pendingAmount indefinitely. The way out is revokeConfirm, which is
+  // not discoverable from the buttons alone, so it is spelled out next to the error.
+  //
+  // The hint is gated on the failing action being execute, and on the error not being
+  // a signature the user declined in the wallet: ACTION_REJECTED means nothing is
+  // stuck yet and the advice would only confuse.
+  const executeFailed =
+    msg?.kind === "err" &&
+    msg?.action === "execute" &&
+    msg?.code !== "ACTION_REJECTED";
+  const showStuckHint =
+    !!executeFailed && !tx.executed && !isCanceled && tx.confirms >= THRESHOLD;
+
   const statusText = tx.executed
     ? null
     : isCanceled
@@ -222,6 +237,20 @@ export function TxCard({
       </div>
 
       {msg ? <Msg m={msg} /> : null}
+
+      {showStuckHint ? (
+        <div
+          className="muted"
+          style={{ fontSize: 13, marginTop: 10, lineHeight: 1.55 }}
+        >
+          Execution keeps failing, so this amount stays reserved while the transaction
+          is active, and cancelling is blocked because the confirmation quorum is
+          already reached.{" "}
+          {meConfirmed
+            ? "To release the funds, revoke your confirmation with the Revoke button above - cancelling becomes available again right after that."
+            : "To release the funds, one of the confirming owners has to revoke their confirmation - cancelling becomes available again right after that."}
+        </div>
+      ) : null}
 
       {explorerUrl ? (
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>

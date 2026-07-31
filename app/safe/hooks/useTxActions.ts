@@ -497,7 +497,17 @@ export function useTxActions(deps: UseTxActionsDeps) {
       setTxMsg({ kind: "ok", text: `TX ${id} ${label}`, hash: tx.hash, id });
       await loadSafe(loadedSafe, { fresh: true }, undefined, false, true);
     } catch (e) {
-      setTxMsg({ kind: "err", text: errText(e), id });
+      // `action` and `code` are carried into the message so TxCard can tell a
+      // reverting recipient (CALL_EXCEPTION) apart from a signature the user
+      // declined (ACTION_REJECTED), and show the revokeConfirm hint only when the
+      // transaction is genuinely stuck.
+      setTxMsg({
+        kind: "err",
+        text: errText(e),
+        id,
+        action,
+        code: (e as any)?.code,
+      });
     } finally {
       setPending((x) => ({ ...x, txAction: null }));
     }
