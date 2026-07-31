@@ -68,14 +68,18 @@ What it enforces on the way in:
   rather than passed on to the node.
 
 What it does on the way out:
-- **caching** with a short TTL for the responses that tolerate it;
+- **caching** with a per-method TTL for the responses that tolerate it: immutable answers
+  (`eth_chainId`, a mined receipt's block, deployed code) are kept indefinitely, `eth_getLogs`
+  over a closed block range for 5 min, and volatile reads for 3 s; a pending receipt and an
+  open-ended log range are not cached at all;
 - **in-flight coalescing** - identical concurrent requests share a single upstream call;
 - **a serialized queue** with a 120 ms minimum interval between upstream calls, plus
   retries;
 - **deadlines** - 10 s per upstream call, 25 s for the whole request.
 
-`GET /api/rpc` returns a small health object: upstream host, allowlist size and the current
-limits.
+`GET /api/rpc` returns a small health object: upstream host, allowlist size, the current
+limits and the name of the cache-bypass request header (`x-fort-fresh`), which a read sends
+when it must not be served from the cache.
 
 ### Known limitations
 
@@ -110,7 +114,10 @@ dependency buys nothing.
 - Faucet: https://faucet.circle.com
 
 ## Contracts
-- Factory: `0x0a12aEa5A35d7199F2B7cac3C14A7a9e470F561a` (deployed at block 54503427)
+- Factory: `0x0a12aEa5A35d7199F2B7cac3C14A7a9e470F561a` (deployed at block 54503427).
+  The address here is documentation only; the value the app actually uses comes from
+  `NEXT_PUBLIC_FACTORY_ADDRESS` (see Environment variables). On a redeploy, change the env
+  var first - this line is the copy that goes stale.
 - Events: `SaveCreated`, `SafeRenamed`, `Deposit`, `TxCreated`, `TxConfirmed`, `TxRevoked`, `TxCancelVoted`, `TxCancelVoteRevoked`, `TxCanceled`, `TxExecuted`
 - Sources and tests: `fort-contracts` (Foundry)
 
@@ -136,17 +143,25 @@ public node directly and the proxy is bypassed.
 
 ## Data persistence
 The dApp stores Safe metadata, a snapshot of each Safe and transaction hashes in browser
-`localStorage`, per wallet. The snapshot lets a background refresh re-read the last 20
-transactions plus any older ones that are still open, instead of the whole list. Clearing
-site data loses nothing that matters: the Safes themselves are recovered from the factory
-by Sync.
+`localStorage`, per wallet. The snapshot lets a background refresh re-read a bounded window
+of the most recent transactions plus any older ones that are still open, instead of the
+whole list. Clearing site data loses nothing that matters: the Safes themselves are
+recovered from the factory by Sync.
 
 ## Environment variables
-Optional, with a sensible default. See `.env.example`.
+See `.env.example`. Locally they live in `.env`; on Vercel, in the project's environment
+variables. `NEXT_PUBLIC_*` values are inlined at build time, so changing one requires a
+rebuild, not just a restart.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `NEXT_PUBLIC_ARC_EXPLORER_TX` | `https://testnet.arcscan.app/tx/` | Explorer transaction URL prefix used to build tx links. |
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `NEXT_PUBLIC_FACTORY_ADDRESS` | yes | none | Address of the SaveFactory the app reads Safes from. |
+| `NEXT_PUBLIC_ARC_EXPLORER_TX` | no | `https://testnet.arcscan.app/tx/` | Explorer transaction URL prefix used to build tx links. |
+
+`NEXT_PUBLIC_FACTORY_ADDRESS` has no fallback on purpose: a wrong or missing factory would
+otherwise surface much later as an empty Safe list. `chain.ts` throws on import if the
+variable is unset, and validates the EIP-55 checksum with `getAddress`, so a typo fails the
+build with a named error instead of a silent misread.
 
 ## Run locally
 ```bash
