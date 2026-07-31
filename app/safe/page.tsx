@@ -24,6 +24,7 @@ import {
   FACTORY_ADDRESS,
   NATIVE_SYMBOL,
   SAFE_ABI,
+  fetchSafesForOwner,
   getFactoryReader,
   getReadProvider,
   isArc,
@@ -294,7 +295,10 @@ export default function Page() {
     try {
       setWalletMsg(null);
 
-      const safes: string[] = await getFactoryReader().getSafesForOwner(w);
+      // Paged read: the factory is asked for a page at a time instead of returning
+      // the whole array in one eth_call, which would keep growing with the number
+      // of safes and eventually hit the call gas limit.
+      const safes: string[] = await fetchSafesForOwner(w);
 
       for (const safe of safes) {
         const addr = normAddr(safe);

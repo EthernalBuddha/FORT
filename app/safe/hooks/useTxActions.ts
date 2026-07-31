@@ -8,7 +8,7 @@ import {
   NATIVE_SYMBOL,
   SAFE_ABI,
   THRESHOLD,
-  getFactoryReader,
+  fetchLatestSafeForOwner,
   getReadProvider,
 } from "../lib/chain";
 import { errText, normAddr } from "../lib/format";
@@ -207,10 +207,12 @@ export function useTxActions(deps: UseTxActionsDeps) {
 
       if (!safe) {
         // Fallback: the event was not found in the receipt, so ask the factory for the
-        // caller's safes and take the most recent one.
+        // caller's most recent safe. This reads the count and a single-item page at the
+        // tail instead of pulling the whole list, so the cost does not grow with the
+        // number of safes owned.
         try {
-          const safes2: string[] = await getFactoryReader().getSafesForOwner(w);
-          if (safes2.length > 0) safe = normAddr(safes2[safes2.length - 1]);
+          const latest = await fetchLatestSafeForOwner(w);
+          if (latest) safe = normAddr(latest);
         } catch {}
       }
 

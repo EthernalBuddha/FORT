@@ -60,7 +60,11 @@ export const FACTORY_ABI = [
   // Must match the contract: `save` is indexed, so it lives in topics, not in data.
   "event SaveCreated(address indexed save, address[3] owners)",
   "function createSave(address[3] owners) payable returns (address)",
+  // Kept for backwards compatibility with safes listed by older UI code paths.
+  // New reads must go through fetchSafesForOwner (paged) below.
   "function getSafesForOwner(address owner) view returns (address[])",
+  "function safesCountForOwner(address owner) view returns (uint256)",
+  "function getSafesForOwnerPaged(address owner, uint256 offset, uint256 limit) view returns (address[])",
   "function getSafeOwners(address safe) view returns (address[3])",
   "function getSafeName(address safe) view returns (string)",
   "function setSafeName(address safe, string name)",
@@ -123,6 +127,61 @@ export function getFactoryReader() {
     factoryReaderSingleton = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, getReadProvider());
   }
   return factoryReaderSingleton;
+}
+
+// Page size for reading the owner's safes. The contract clamps offset/limit to
+// the remaining items, so the last page is simply shorter and never reverts.
+// 50 keeps a typical owner at one or two calls while staying far away from the
+// eth_call gas limit that an unbounded getSafesForOwner would eventually hit.
+export const SAFES_PAGE_SIZE = 50;
+
+// Reads the full list of safes for an owner page by page.
+// Replaces the unbounded getSafesForOwner call: the array is no longer built in
+// a single response, so a large number of safes cannot blow up the eth_call.
+export async function fetchSafesForOwner(owner: string): Promise<string[]> {
+  const factory = getFactoryReader();
+
+  const total = Number(await factory.safesCountForOwner(owner));
+  if (!total) return [];
+
+  const out: string[] = [];
+  for (let offset = 0; offset < total; offset += SAFES_PAGE_SIZE) {
+    const page: string[] = await factory.getSafesForOwnerPaged(
+      owner,
+      offset,
+      SAFES_PAGE_SIZE,
+    );
+    // Defensive stop: an empty page means the list shrank between calls
+    // (a safe created concurrently cannot shrink it, but a stale cache can),
+    // and continuing would loop until `total` for nothing.
+    if (!page.length) break;
+    out.push(...page);
+  }
+
+  return out;
+}
+
+// Reads only the most recently created safe of an owner.
+// Used as a fallback when the SaveCreated event cannot be recovered from the
+// receipt: pulling the whole list just to take its last element would grow with
+// the number of safes, so the count is read first and a single-item page is
+// requested at the tail. Two calls, regardless of how many safes exist.
+// Returns null when the owner has no safes.
+export async function fetchLatestSafeForOwner(
+  owner: string,
+): Promise<string | null> {
+  const factory = getFactoryReader();
+
+  const total = Number(await factory.safesCountForOwner(owner));
+  if (!total) return null;
+
+  const page: string[] = await factory.getSafesForOwnerPaged(
+    owner,
+    total - 1,
+    1,
+  );
+
+  return page.length ? page[0] : null;
 }
 
 export function txUrl(hash: string) {
