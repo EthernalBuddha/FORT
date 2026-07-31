@@ -118,10 +118,10 @@ dependency buys nothing.
 - Faucet: https://faucet.circle.com
 
 ## Contracts
-- Factory: `0x0a12aEa5A35d7199F2B7cac3C14A7a9e470F561a` (deployed at block 54503427).
-  The address here is documentation only; the value the app actually uses comes from
-  `NEXT_PUBLIC_FACTORY_ADDRESS` (see Environment variables). On a redeploy, change the env
-  var first - this line is the copy that goes stale.
+- Factory: the address is not repeated here on purpose. The single copy kept in this
+  repository is `NEXT_PUBLIC_FACTORY_ADDRESS` in `.env.example` (see Environment
+  variables), and that is also the value the app reads at build time. On a redeploy, update
+  the environment variable in Vercel and the value in `.env.example` - nothing else.
 - Events: `SaveCreated`, `SafeRenamed`, `Deposit`, `TxCreated`, `TxConfirmed`, `TxRevoked`, `TxCancelVoted`, `TxCancelVoteRevoked`, `TxCanceled`, `TxExecuted`
 - Sources and tests: `fort-contracts` (Foundry)
 
