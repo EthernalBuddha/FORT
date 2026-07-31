@@ -17,6 +17,24 @@ const MAX_BATCH_ITEMS = 20;
 const UPSTREAM_TIMEOUT_MS = 10_000;
 const MAX_CACHE_ENTRIES = 500;
 
+// Cache bypass for reads that follow a mined transaction. The client sets this
+// header right after tx.wait(); the proxy then skips the cache lookup, asks the
+// node and overwrites the stale entry with the fresh result.
+//
+// The instruction travels with the request on purpose. A "flush the cache"
+// endpoint would be unreliable here: the cache is a plain Map in one instance's
+// memory, so the flush and the following read can land on different instances.
+const FRESH_HEADER = "x-fort-fresh";
+
+// Only reads are cached at all, so a forged header cannot corrupt anything: the
+// worst it can do is send more traffic to the node, which the rate limiter
+// already bounds.
+function isFreshRequest(req: NextRequest): boolean {
+  const value = req.headers.get(FRESH_HEADER);
+
+  return value === "1" || value === "true";
+}
+
 // Per-client rate limit. Coarse on purpose: the counter lives in this instance's
 // memory, like the 120 ms queue above, so it stops a single misbehaving script
 // but not a distributed load.
@@ -584,7 +602,8 @@ async function requestUpstream(
 // One batch element -> one request to the node. The reply always carries the original id.
 async function callSingle(
   item: unknown,
-  deadlineAt: number
+  deadlineAt: number,
+  fresh: boolean
 ): Promise<Record<string, unknown> | null> {
   const id = idOf(item);
   const notification = isNotification(item);
@@ -637,7 +656,7 @@ async function callSingle(
       ? getCacheKey(method, params)
       : null;
 
-    if (cacheKey) {
+    if (cacheKey && !fresh) {
       const cached = getCachedResult(cacheKey);
 
       if (cached.hit) {
@@ -652,7 +671,9 @@ async function callSingle(
     let upstreamPromise: Promise<RpcObject>;
 
     if (cacheKey) {
-      const existing = inFlight.get(cacheKey);
+      // A fresh request must not join a call that started before the
+      // transaction was mined: that call can still answer with the old state.
+      const existing = fresh ? undefined : inFlight.get(cacheKey);
 
       if (existing) {
         upstreamPromise = existing;
@@ -702,6 +723,7 @@ export async function GET() {
       methods: ALLOWED_METHODS.size,
       maxBodyBytes: MAX_BODY_BYTES,
       maxBatchItems: MAX_BATCH_ITEMS,
+      freshHeader: FRESH_HEADER,
     },
     { status: 200, headers: { "cache-control": "no-store" } }
   );
@@ -721,6 +743,10 @@ export async function POST(req: NextRequest) {
       status: 403,
     });
   }
+
+  // Read once per request: a batch is either fully fresh or fully cached, which
+  // matches how the client uses it - one reload of the safe after tx.wait().
+  const fresh = isFreshRequest(req);
 
   const rate = takeToken(getClientKey(req));
 
@@ -819,7 +845,7 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      const result = await callSingle(parsedBody[index], deadlineAt);
+      const result = await callSingle(parsedBody[index], deadlineAt, fresh);
 
       if (result) {
         results.push(result);
@@ -837,7 +863,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const single = await callSingle(parsedBody, deadlineAt);
+  const single = await callSingle(parsedBody, deadlineAt, fresh);
 
   if (!single) {
     return new NextResponse(null, { status: 204 });
