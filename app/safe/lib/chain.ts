@@ -1,8 +1,32 @@
 import { ethers } from "ethers";
 
-const FACTORY_ADDRESS_RAW = "0xc965e062f93F35507DF0F9E9a3973F04704215dA";
+// The factory address is configuration, not source code: it changes on every
+// redeploy. It comes from NEXT_PUBLIC_FACTORY_ADDRESS so the value lives in one
+// place (.env locally, project settings on Vercel) instead of being duplicated
+// across the repo. Next.js inlines NEXT_PUBLIC_* at build time, so the full
+// reference below must stay literal - do not rewrite it as a dynamic lookup.
+const FACTORY_ADDRESS_RAW = process.env.NEXT_PUBLIC_FACTORY_ADDRESS;
 
-export const FACTORY_ADDRESS = ethers.getAddress(FACTORY_ADDRESS_RAW);
+if (!FACTORY_ADDRESS_RAW) {
+  throw new Error(
+    "NEXT_PUBLIC_FACTORY_ADDRESS is not set. Add it to .env (local) and to the " +
+      "project environment variables on Vercel, then rebuild. See .env.example.",
+  );
+}
+
+// getAddress both validates the EIP-55 checksum and normalises the casing,
+// so a typo in the env var fails here with a clear message instead of
+// surfacing later as an empty contract call.
+let factoryAddressChecked: string;
+try {
+  factoryAddressChecked = ethers.getAddress(FACTORY_ADDRESS_RAW);
+} catch {
+  throw new Error(
+    `NEXT_PUBLIC_FACTORY_ADDRESS is not a valid address: "${FACTORY_ADDRESS_RAW}"`,
+  );
+}
+
+export const FACTORY_ADDRESS = factoryAddressChecked;
 export const ARC_CHAIN_ID = 5042002;
 export const ARC_CHAIN_ID_HEX = "0x4cef52";
 
@@ -17,7 +41,8 @@ export const NATIVE_SYMBOL = "USDC";
 export const NATIVE_DECIMALS = 18;
 
 // Mirrors Save.THRESHOLD (constant in the contract, cannot change without a
-// redeploy). Verify this value together with FACTORY_ADDRESS_RAW above.
+// redeploy). Verify this value against the factory pointed to by
+// NEXT_PUBLIC_FACTORY_ADDRESS.
 export const THRESHOLD = 2;
 
 export const EXPLORER_TX_PREFIX =

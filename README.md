@@ -87,7 +87,7 @@ would be required for that.
 - Faucet: https://faucet.circle.com
 
 ## Contracts
-- Factory: `0xc965e062f93F35507DF0F9E9a3973F04704215dA` (deployed at block 54284174)
+- Factory: `0x0a12aEa5A35d7199F2B7cac3C14A7a9e470F561a` (deployed at block 54503427)
 - Events: `SaveCreated`, `SafeRenamed`, `Deposit`, `TxCreated`, `TxConfirmed`, `TxRevoked`, `TxCancelVoted`, `TxCancelVoteRevoked`, `TxCanceled`, `TxExecuted`
 - Sources and tests: `fort-contracts` (Foundry)
 
