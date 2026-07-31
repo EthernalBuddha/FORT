@@ -49,8 +49,13 @@ export const NATIVE_SYMBOL = "USDC";
 export const NATIVE_DECIMALS = 18;
 
 // Mirrors Save.THRESHOLD (constant in the contract, cannot change without a
-// redeploy). Verify this value against the factory pointed to by
-// NEXT_PUBLIC_FACTORY_ADDRESS.
+// redeploy). Kept as a plain constant on purpose: components use it during the
+// first render, before any network read can have answered.
+//
+// The value is no longer trusted blindly - checkSafeThreshold below reads the
+// real constant from the opened safe and reports a mismatch, which would mean
+// NEXT_PUBLIC_FACTORY_ADDRESS points at a different Save version than this UI
+// was written for.
 export const THRESHOLD = 2;
 
 export const EXPLORER_TX_PREFIX =
@@ -80,6 +85,9 @@ export const FACTORY_ABI = [
 
 export const SAFE_ABI = [
   "function owners(uint256) view returns (address)",
+  // Public constant in Save.sol, so Solidity generates this getter. Read once per
+  // safe to verify the THRESHOLD constant above.
+  "function THRESHOLD() view returns (uint8)",
   "function txCount() view returns (uint256)",
   "function pendingAmount() view returns (uint256)",
   "function availableBalance() view returns (uint256)",
@@ -179,6 +187,53 @@ export function getFreshFactoryReader() {
     );
   }
   return freshFactoryReaderSingleton;
+}
+
+// Reads Save.THRESHOLD from an opened safe. The value is a contract constant, so
+// one read per safe address is enough for the lifetime of the page.
+const thresholdCache = new Map<string, number>();
+
+export async function readSafeThreshold(
+  safeAddress: string,
+  provider?: any,
+): Promise<number> {
+  const key = safeAddress.toLowerCase();
+  const cached = thresholdCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const safe: any = new ethers.Contract(
+    safeAddress,
+    SAFE_ABI,
+    provider || getReadProvider(),
+  );
+  const onChain = Number(await safe.THRESHOLD());
+  if (!Number.isFinite(onChain) || onChain <= 0) {
+    throw new Error(`Safe ${safeAddress} reported an unusable THRESHOLD`);
+  }
+
+  thresholdCache.set(key, onChain);
+  return onChain;
+}
+
+// Compares the on-chain constant with the THRESHOLD used by this UI.
+//
+// A mismatch is not cosmetic: the quorum drives which buttons are offered, so a
+// UI expecting 2 against a contract wanting 3 would show Execute on a
+// transaction that reverts with NotEnoughConfirmations, and hide Cancel on a
+// transaction that could still be canceled.
+//
+// A failed read is reported as ok: the network being unavailable must not stop a
+// safe from opening, and the check simply retries on the next load.
+export async function checkSafeThreshold(
+  safeAddress: string,
+  provider?: any,
+): Promise<{ ok: boolean; onChain: number | null }> {
+  try {
+    const onChain = await readSafeThreshold(safeAddress, provider);
+    return { ok: onChain === THRESHOLD, onChain };
+  } catch {
+    return { ok: true, onChain: null };
+  }
 }
 
 // Page size for reading the owner's safes. The contract clamps offset/limit to

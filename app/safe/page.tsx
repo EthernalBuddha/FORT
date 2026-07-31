@@ -24,6 +24,8 @@ import {
   FACTORY_ADDRESS,
   NATIVE_SYMBOL,
   SAFE_ABI,
+  THRESHOLD,
+  checkSafeThreshold,
   fetchSafesForOwner,
   getFactoryReader,
   getFreshReadProvider,
@@ -118,6 +120,10 @@ export default function Page() {
 
   const [loadingSafe, setLoadingSafe] = useState(false);
   const [safeErr, setSafeErr] = useState("");
+  // Set only when the opened safe's real THRESHOLD disagrees with the constant
+  // this UI is built around. Empty in the normal case and when the check could
+  // not be performed.
+  const [thresholdErr, setThresholdErr] = useState("");
 
   const [createdSafes, setCreatedSafes] = useState<string[]>([]);
   const [safeNames, setSafeNames] = useState<Record<string, string>>({});
@@ -478,6 +484,7 @@ export default function Page() {
     setTxCancelVotedByMe({});
     setBalance("0");
     setAvailable("");
+    setThresholdErr("");
   }
 
   async function loadSafe(
@@ -652,6 +659,25 @@ export default function Page() {
       setAccess("owner");
       setOwnerIndex(idx);
       setOwners(ownersArr);
+
+      // The quorum decides which buttons this UI offers, so a THRESHOLD constant
+      // that disagrees with the contract would offer Execute on transactions that
+      // revert with NotEnoughConfirmations, and hide Cancel on ones that could
+      // still be canceled. Read the real constant once per safe and say so loudly
+      // if it differs.
+      //
+      // Deliberately not awaited: the check must not delay the safe from opening.
+      // Deliberately on the plain provider: a contract constant is exactly the
+      // kind of value the proxy cache exists for.
+      checkSafeThreshold(a).then(
+        ({ ok, onChain }) =>
+          setThresholdErr(
+            ok
+              ? ""
+              : `This safe requires ${onChain} confirmations, but the interface is built for ${THRESHOLD}. Counters and buttons below can be wrong - check NEXT_PUBLIC_FACTORY_ADDRESS before signing anything.`,
+          ),
+        () => {},
+      );
 
       // Skip the request while syncSafesFromChain is already fetching names for this wallet:
       // otherwise both paths ask the node for the same getSafeName on page open.
@@ -1386,6 +1412,15 @@ export default function Page() {
                         style={{ marginTop: 10, fontSize: 13 }}
                       >
                         {safeErr}
+                      </div>
+                    ) : null}
+
+                    {thresholdErr ? (
+                      <div
+                        className="err"
+                        style={{ marginTop: 10, fontSize: 13 }}
+                      >
+                        {thresholdErr}
                       </div>
                     ) : null}
                   </div>
