@@ -5,7 +5,11 @@ Multisig dApp for secure transfers on Arc Testnet. Built with Next.js (App Route
 https://fortsafe.vercel.app/
 
 ## Features
-- Wallet connect: EIP-6963 + fallback (`WalletConnectModal`), normalized EIP-1193 (`provider.request`)
+- Wallet connect: picks an injected EIP-1193 provider (`window.ethereum`, or one entry of
+  `window.ethereum.providers`, identified by `isMetaMask` / `isRabby` / `isCoinbaseWallet`),
+  chosen by the user in `WalletConnectModal` and remembered in `localStorage` for silent
+  reconnect. Every wallet call goes through one wrapper with a timeout, so a wallet that
+  never answers cannot hang the UI
 - Auto add/switch to Arc Testnet
 - Safe flow: 3 owners, threshold 2 of 3
 - Create / confirm / revoke / execute transfers
