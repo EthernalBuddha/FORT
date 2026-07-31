@@ -81,7 +81,11 @@ export type UseTxActionsDeps = {
   syncSafesFromChain: (walletAddr: string, force?: boolean) => Promise<void>;
   loadSafe: (
     addr: string,
-    override?: { provider?: any; signer?: any },
+    // fresh: read past the RPC proxy cache. The proxy caches eth_call and
+    // eth_getBalance for three seconds, which is longer than the gap between a
+    // mined transaction and the reload that follows it, so without this flag the
+    // UI can redraw the pre-transaction confirmation count and balance.
+    override?: { provider?: any; signer?: any; fresh?: boolean },
     walletAddr?: string,
     silent?: boolean,
     force?: boolean,
@@ -211,7 +215,7 @@ export function useTxActions(deps: UseTxActionsDeps) {
         // tail instead of pulling the whole list, so the cost does not grow with the
         // number of safes owned.
         try {
-          const latest = await fetchLatestSafeForOwner(w);
+          const latest = await fetchLatestSafeForOwner(w, true);
           if (latest) safe = normAddr(latest);
         } catch {}
       }
@@ -243,7 +247,13 @@ export function useTxActions(deps: UseTxActionsDeps) {
       setOwner3("");
 
       setSafeAddress(safe);
-      await loadSafe(safe, { provider: p2, signer: s2 }, w, false, true);
+      await loadSafe(
+        safe,
+        { provider: p2, signer: s2, fresh: true },
+        w,
+        false,
+        true,
+      );
 
       return true;
     } catch (e) {
@@ -378,7 +388,7 @@ export function useTxActions(deps: UseTxActionsDeps) {
       setTxAmount("");
 
       setTxMsg({ kind: "ok", text: "Transaction created", hash: tx.hash });
-      await loadSafe(loadedSafe, undefined, undefined, false, true);
+      await loadSafe(loadedSafe, { fresh: true }, undefined, false, true);
 
       setTransferOpen(false);
       return true;
@@ -485,7 +495,7 @@ export function useTxActions(deps: UseTxActionsDeps) {
       }
 
       setTxMsg({ kind: "ok", text: `TX ${id} ${label}`, hash: tx.hash, id });
-      await loadSafe(loadedSafe, undefined, undefined, false, true);
+      await loadSafe(loadedSafe, { fresh: true }, undefined, false, true);
     } catch (e) {
       setTxMsg({ kind: "err", text: errText(e), id });
     } finally {

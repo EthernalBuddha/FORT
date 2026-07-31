@@ -26,6 +26,7 @@ import {
   SAFE_ABI,
   fetchSafesForOwner,
   getFactoryReader,
+  getFreshReadProvider,
   getReadProvider,
   isArc,
   txUrl,
@@ -298,7 +299,11 @@ export default function Page() {
       // Paged read: the factory is asked for a page at a time instead of returning
       // the whole array in one eth_call, which would keep growing with the number
       // of safes and eventually hit the call gas limit.
-      const safes: string[] = await fetchSafesForOwner(w);
+      // A forced sync happens right after a safe was created or on an explicit
+      // user action, so it reads past the proxy cache: a cached list would not
+      // contain the safe that was just deployed. Unforced syncs keep using the
+      // cache - there is nothing new to see on a plain page open.
+      const safes: string[] = await fetchSafesForOwner(w, !!force);
 
       for (const safe of safes) {
         const addr = normAddr(safe);
@@ -477,7 +482,10 @@ export default function Page() {
 
   async function loadSafe(
     addr: string,
-    override?: { provider?: any; signer?: any },
+    // fresh: read past the proxy cache. Set by the transaction actions right
+    // after tx.wait(), where the cached eth_call would still answer with the
+    // pre-transaction confirmation count and balance.
+    override?: { provider?: any; signer?: any; fresh?: boolean },
     walletAddr?: string,
     silent?: boolean,
     force?: boolean,
@@ -538,7 +546,11 @@ export default function Page() {
       }
 
       // The wallet is only used for signing and network detection. Reads go through the proxy.
-      const rp = getReadProvider();
+      //
+      // Deliberately not tied to `force`: the background poll and the network or
+      // account change also force a reload, and bypassing the cache every
+      // fifteen seconds would multiply node traffic for nothing.
+      const rp = override?.fresh ? getFreshReadProvider() : getReadProvider();
 
       const cid = eth ? await readChainIdDirect(eth) : ARC_CHAIN_ID;
       if (cid) setChainId(cid);

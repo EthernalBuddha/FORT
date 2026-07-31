@@ -37,6 +37,14 @@ export const RPC_READ_URL =
     : "https://rpc.testnet.arc.network";
 export const ARC_EXPLORER_BASE = "https://testnet.arcscan.app";
 
+// Cache-bypass header understood by app/api/rpc/route.ts. Reads that carry it
+// skip the proxy's in-memory cache and go to the node.
+//
+// The name is duplicated on purpose: route.ts is a server module and importing
+// from it would drag server code into the client bundle. Keep both copies in
+// sync - the proxy also reports the name it expects in its GET probe.
+export const FRESH_HEADER = "x-fort-fresh";
+
 export const NATIVE_SYMBOL = "USDC";
 export const NATIVE_DECIMALS = 18;
 
@@ -118,6 +126,35 @@ export function getReadProvider() {
   return readProviderSingleton;
 }
 
+// Second read provider, identical to the one above except that every request
+// carries FRESH_HEADER. Used for the reads that immediately follow tx.wait():
+// the proxy caches eth_call and eth_getBalance for three seconds, which is
+// longer than the gap between a mined transaction and the reload after it, so a
+// plain read can still answer with pre-transaction state - stale confirmation
+// counts, stale balance.
+//
+// Kept separate instead of flipping a flag on the shared provider: normal reads
+// should keep hitting the cache, and a provider's headers are fixed at
+// construction time.
+let freshReadProviderSingleton: any = null;
+
+export function getFreshReadProvider() {
+  if (!freshReadProviderSingleton) {
+    const request = new ethers.FetchRequest(RPC_READ_URL);
+    request.setHeader(FRESH_HEADER, "1");
+
+    freshReadProviderSingleton = new ethers.JsonRpcProvider(
+      request,
+      ARC_CHAIN_ID,
+      {
+        batchMaxCount: 10,
+        staticNetwork: true,
+      },
+    );
+  }
+  return freshReadProviderSingleton;
+}
+
 // Single factory instance bound to the read provider. Every factory read goes through
 // it instead of hand-rolled eth_call fetches, so encoding and decoding live in one place.
 let factoryReaderSingleton: any = null;
@@ -129,6 +166,21 @@ export function getFactoryReader() {
   return factoryReaderSingleton;
 }
 
+// Factory reader bound to the fresh provider. Needed right after createSafe:
+// a cached safes list would not yet contain the safe that was just deployed.
+let freshFactoryReaderSingleton: any = null;
+
+export function getFreshFactoryReader() {
+  if (!freshFactoryReaderSingleton) {
+    freshFactoryReaderSingleton = new ethers.Contract(
+      FACTORY_ADDRESS,
+      FACTORY_ABI,
+      getFreshReadProvider(),
+    );
+  }
+  return freshFactoryReaderSingleton;
+}
+
 // Page size for reading the owner's safes. The contract clamps offset/limit to
 // the remaining items, so the last page is simply shorter and never reverts.
 // 50 keeps a typical owner at one or two calls while staying far away from the
@@ -138,8 +190,13 @@ export const SAFES_PAGE_SIZE = 50;
 // Reads the full list of safes for an owner page by page.
 // Replaces the unbounded getSafesForOwner call: the array is no longer built in
 // a single response, so a large number of safes cannot blow up the eth_call.
-export async function fetchSafesForOwner(owner: string): Promise<string[]> {
-  const factory = getFactoryReader();
+// Pass fresh: true when the list is read right after a safe was created, so the
+// proxy cache is bypassed instead of answering with the previous list.
+export async function fetchSafesForOwner(
+  owner: string,
+  fresh = false,
+): Promise<string[]> {
+  const factory = fresh ? getFreshFactoryReader() : getFactoryReader();
 
   const total = Number(await factory.safesCountForOwner(owner));
   if (!total) return [];
@@ -169,8 +226,9 @@ export async function fetchSafesForOwner(owner: string): Promise<string[]> {
 // Returns null when the owner has no safes.
 export async function fetchLatestSafeForOwner(
   owner: string,
+  fresh = false,
 ): Promise<string | null> {
-  const factory = getFactoryReader();
+  const factory = fresh ? getFreshFactoryReader() : getFactoryReader();
 
   const total = Number(await factory.safesCountForOwner(owner));
   if (!total) return null;
