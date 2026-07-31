@@ -34,8 +34,8 @@ Treat the Safe's contents as public information.
 ## Balances
 The contract reserves the amount of every created transfer in `pendingAmount`, so two
 numbers are not the same:
-- **balance** вЂ” everything the Safe holds;
-- **available balance** вЂ” what is left after the reservations of pending transfers.
+- **balance** - everything the Safe holds;
+- **available balance** - what is left after the reservations of pending transfers.
 
 Creating a transfer is checked against the available balance, executing one against the
 full balance: the reservation is released as the transfer executes.
