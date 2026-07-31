@@ -76,13 +76,20 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type SourceCheck = { allowed: boolean; reason: string };
 
-// A request with neither header is server side code or curl, and it passes: the
-// browser always sends Origin on a cross-origin POST with a JSON body. Preview
-// deployments are covered through VERCEL_URL.
+// Origin is mandatory. A browser always sends it on a cross-origin POST with a
+// JSON body, so requiring it costs real users nothing while closing the open
+// relay: curl and scripted clients send no Origin and are now rejected.
+//
+// This is still not authentication - a hand-written client can forge the header.
+// It removes the free pass, not the possibility of a deliberate attack.
+//
+// Note: this route no longer answers server side callers (route handlers, cron,
+// scripts). Nothing in save-ui calls it that way today. If that changes, add a
+// shared-secret header check here rather than loosening the Origin rule.
 function checkSource(req: NextRequest): SourceCheck {
   const candidate = req.headers.get("origin") || req.headers.get("referer");
 
-  if (!candidate) return { allowed: true, reason: "no origin header" };
+  if (!candidate) return { allowed: false, reason: "missing origin header" };
 
   let host = "";
 
@@ -105,18 +112,31 @@ type RateBucket = { tokens: number; updatedAt: number };
 
 const rateBuckets = new Map<string, RateBucket>();
 
-// The platform sets x-forwarded-for; the left-most entry is the client. Any
-// value here can be spoofed, so this is a speed bump, not authentication.
+// x-vercel-forwarded-for is written by the platform edge and overwrites whatever
+// the client sent, so it cannot be spoofed. x-forwarded-for can: the edge only
+// appends to it, and a client-supplied left-most entry survives. Prefer the
+// trusted header and keep the others as a local-development fallback, where
+// there is no edge and no untrusted traffic either.
 function getClientKey(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for");
+  const vercelForwarded = req.headers.get("x-vercel-forwarded-for");
 
-  if (forwarded) {
-    const first = forwarded.split(",")[0];
+  if (vercelForwarded) {
+    const first = vercelForwarded.split(",")[0];
     if (first && first.trim()) return first.trim();
   }
 
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp && realIp.trim()) return realIp.trim();
+  // Local development only: on Vercel the header above is always present.
+  if (!process.env.VERCEL) {
+    const forwarded = req.headers.get("x-forwarded-for");
+
+    if (forwarded) {
+      const first = forwarded.split(",")[0];
+      if (first && first.trim()) return first.trim();
+    }
+
+    const realIp = req.headers.get("x-real-ip");
+    if (realIp && realIp.trim()) return realIp.trim();
+  }
 
   return "unknown";
 }
@@ -689,6 +709,19 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const deadlineAt = Date.now() + POST_DEADLINE_MS;
+
+  // Source first, rate limit second. A rejected request must not allocate a
+  // bucket: rateBuckets is an in-memory map, and letting anonymous traffic
+  // create entries in it turns the limiter itself into a memory target.
+  const source = checkSource(req);
+
+  if (!source.allowed) {
+    console.error("[rpc-proxy] blocked source: " + source.reason);
+    return NextResponse.json(rpcError(null, -32600, "origin not allowed"), {
+      status: 403,
+    });
+  }
+
   const rate = takeToken(getClientKey(req));
 
   if (!rate.allowed) {
@@ -696,15 +729,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(rpcError(null, -32005, "too many requests"), {
       status: 429,
       headers: { "retry-after": String(Math.ceil(rate.retryAfterMs / 1000)) },
-    });
-  }
-
-  const source = checkSource(req);
-
-  if (!source.allowed) {
-    console.error("[rpc-proxy] blocked source: " + source.reason);
-    return NextResponse.json(rpcError(null, -32600, "origin not allowed"), {
-      status: 403,
     });
   }
 
