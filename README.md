@@ -87,8 +87,9 @@ when it must not be served from the cache.
 
 ### Known limitations
 
-Both of these are deliberate choices for a testnet deployment, not oversights. They are
-listed here so that nobody reads more strength into the proxy than it has.
+The items below are deliberate choices for a testnet deployment, not oversights. The first
+two are listed so that nobody reads more strength into the proxy than it has; the third
+records a set of dependency advisories that currently have no fix to apply.
 
 **The origin check is not authentication.** It only requires the header to be present and
 to name a known host, and a client sets that header freely. A request forged with
@@ -108,6 +109,25 @@ Both are worth revisiting under one condition: the app moving to mainnet or the 
 domain taking real traffic. The replacement for the second one is a shared store for the
 counters and the cache, such as Vercel KV or Upstash Redis; until then the added
 dependency buys nothing.
+
+**Three `npm audit` advisories stay open because no fix has shipped.** The report lists
+`next` plus the two packages it pins internally, `postcss` and `sharp`, all high severity.
+None of the reported attack paths exist in this app: there is no `next/image` usage, no
+Server Actions, no middleware, no rewrites and no i18n, and the only server-side code is
+the RPC route handler described above. The patched release is Next 16.3.0, which is not
+out as a stable version yet - only a preview build exists - so `postcss` and `sharp` cannot
+move either, since Next pins them. Expect all three to disappear with the 16.3.0 upgrade.
+
+What was fixable has been fixed, on 2026-08-01: `npm audit fix` took `ethers` from 6.16.0
+to 6.17.0, which pulled `ws` past its own advisory, and moved `next` from 16.1.1 to
+16.2.12. Neither range in `package.json` changed, only `package-lock.json`. The `ws` issue
+was unreachable here in any case - the app talks to the node over HTTP through the proxy
+and never opens a WebSocket provider.
+
+Do not run `npm audit fix --force` on this repository. npm satisfies an advisory by leaving
+the affected version range in either direction, so it offers to install `next@9.3.3`: a
+downgrade of seven major versions to a release that predates the App Router. The build
+would not survive it.
 
 ## Network
 - Name: Arc Testnet
